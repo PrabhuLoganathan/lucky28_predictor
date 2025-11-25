@@ -207,7 +207,7 @@ top_n = st.sidebar.slider('Top N hot/cold numbers', 3, 10, 5)
 
 page = st.sidebar.radio(
     'Page',
-    ['Dashboard', 'Number Breakdown', 'Streaks & Probabilities', 'Streak Simulator', 'Raw Data'],
+    ['Dashboard', 'Number Breakdown', 'Streaks & Probabilities', 'Combo Sequences', 'Streak Simulator', 'Raw Data'],
 )
 
 recent_series = df['result'].tail(last_n)
@@ -326,6 +326,151 @@ elif page == 'Streaks & Probabilities':
         st.write('No repetitions.')
     else:
         st.dataframe(recent_repeated, use_container_width=False)
+
+
+elif page == 'Combo Sequences':
+    st.header('🔗 Combo Sequences (SO / SE / BO / BE)')
+
+    seq_df = df[['id', 'result']].dropna().copy() if 'id' in df.columns else df[['result']].dropna().copy()
+    if 'id' in seq_df.columns:
+        seq_df = seq_df.sort_values('id')
+    else:
+        seq_df = seq_df.reset_index(drop=True)
+
+    # Map each result to its combo group
+    seq_df['result'] = seq_df['result'].astype(int)
+    seq_df['combo'] = seq_df['result'].apply(lambda n: classify(n)[4])
+
+    # Add a simple running index so it's easy to talk about "Game 1, Game 2, ..."
+    seq_df = seq_df.reset_index(drop=True)
+    seq_df['game_index'] = seq_df.index + 1
+
+    st.caption('Using filtered data and current date window from the sidebar.')
+
+    # Chip-style compact sequence preview (limited to first 200 for performance)
+    st.subheader('Compact combo sequence preview')
+    max_preview = 200
+    preview_list = seq_df['combo'].tolist()[:max_preview]
+    if preview_list:
+        preview_str = ' | '.join(preview_list)
+        if len(seq_df) > max_preview:
+            preview_str += ' | ...'
+        st.markdown(f'`{preview_str}`')
+        st.caption(f'Showing first {min(len(seq_df), max_preview)} combos in order.')
+    else:
+        st.info('No combo data available in current filter.')
+
+    st.markdown('---')
+    st.subheader('Full sequence table')
+
+    display_cols = ['game_index', 'id', 'result', 'combo'] if 'id' in seq_df.columns else ['game_index', 'result', 'combo']
+    renamed = {
+        'game_index': 'Game #',
+        'result': 'Number',
+        'combo': 'Combo',
+    }
+    if 'id' in seq_df.columns:
+        renamed['id'] = 'Row ID'
+
+    st.dataframe(
+        seq_df[display_cols].rename(columns=renamed),
+        use_container_width=True,
+        height=400,
+    )
+
+    # Find the longest run where the same combo repeats without breaking (overall best streak)
+    combos = seq_df['combo'].tolist()
+    if combos:
+        best_label = None
+        best_len = 0
+        best_start = 0
+
+        current_label = None
+        current_len = 0
+        current_start = 0
+
+        for i, lab in enumerate(combos):
+            if lab == current_label:
+                current_len += 1
+            else:
+                current_label = lab
+                current_len = 1
+                current_start = i
+
+            if current_len > best_len:
+                best_len = current_len
+                best_label = current_label
+                best_start = current_start
+
+        best_end = best_start + best_len - 1
+        start_game = best_start + 1
+        end_game = best_end + 1
+
+        st.markdown('---')
+        st.subheader('🔥 Maximum repeated combo sequence (overall, filtered data)')
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric('Combo', best_label)
+        with c2:
+            st.metric('Length (games in a row)', best_len)
+        with c3:
+            st.metric('From game → to game', f'{start_game} → {end_game}')
+
+        # Also compute per-combo max streaks
+        st.markdown('---')
+        st.subheader('📊 Per-combo maximum streaks')
+        per_combo_rows = []
+        for target in ['SO', 'SE', 'BO', 'BE']:
+            max_len = 0
+            max_start = None
+
+            cur_len = 0
+            cur_start = None
+
+            for i, lab in enumerate(combos):
+                if lab == target:
+                    if cur_len == 0:
+                        cur_start = i
+                    cur_len += 1
+                else:
+                    if cur_len > 0 and cur_len > max_len:
+                        max_len = cur_len
+                        max_start = cur_start
+                    cur_len = 0
+                    cur_start = None
+
+            # final flush
+            if cur_len > 0 and cur_len > max_len:
+                max_len = cur_len
+                max_start = cur_start
+
+            if max_len > 0:
+                s_game = max_start + 1
+                e_game = max_start + max_len
+            else:
+                s_game = None
+                e_game = None
+
+            per_combo_rows.append(
+                {
+                    'Combo': target,
+                    'Max streak length': max_len,
+                    'Start game #': s_game,
+                    'End game #': e_game,
+                }
+            )
+
+        st.dataframe(
+            pd.DataFrame(per_combo_rows),
+            use_container_width=True,
+        )
+
+        st.caption(
+            'The first card shows the absolute longest combo streak. The table above breaks it down '
+            'for each combo (SO / SE / BO / BE) separately, using only the filtered data range.'
+        )
+    else:
+        st.info('No combo data available in current filter.')
 
 elif page == 'Streak Simulator':
     st.header('🧪 Streak Continuation Simulator')
