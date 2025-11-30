@@ -347,16 +347,33 @@ elif page == 'Combo Sequences':
 
     st.caption('Using filtered data and current date window from the sidebar.')
 
-    # Chip-style compact sequence preview (limited to first 200 for performance)
-    st.subheader('Compact combo sequence preview')
-    max_preview = 200
-    preview_list = seq_df['combo'].tolist()[:max_preview]
-    if preview_list:
-        preview_str = ' | '.join(preview_list)
-        if len(seq_df) > max_preview:
-            preview_str += ' | ...'
-        st.markdown(f'`{preview_str}`')
-        st.caption(f'Showing first {min(len(seq_df), max_preview)} combos in order.')
+    # Grouped rows preview (recent at top)
+    st.subheader('Compact combo sequence preview (Recent at Top)')
+    
+    # Get all combos, recent first
+    all_combos = seq_df['combo'].tolist()[::-1]
+    
+    if all_combos:
+        grouped_rows = []
+        if all_combos:
+            current_group = [all_combos[0]]
+            for c in all_combos[1:]:
+                if c == current_group[-1]:
+                    current_group.append(c)
+                else:
+                    grouped_rows.append(current_group)
+                    current_group = [c]
+            grouped_rows.append(current_group)
+        
+        # Display top N groups
+        max_groups = 50
+        for group in grouped_rows[:max_groups]:
+            # Join with comma
+            row_str = ', '.join(group)
+            st.text(row_str)
+            
+        if len(grouped_rows) > max_groups:
+            st.caption('...')
     else:
         st.info('No combo data available in current filter.')
 
