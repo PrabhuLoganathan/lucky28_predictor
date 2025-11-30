@@ -168,6 +168,86 @@ def simulate_streak_continuation(p_target: float, current_len: int, sims: int = 
     return s.value_counts().sort_index()
 
 
+def window_repetition_analysis(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+    """
+    Sliding-window repetition analysis over the filtered data.
+    Each row = one window of `window` consecutive games.
+    """
+    if 'result' not in df.columns:
+        return pd.DataFrame()
+
+    # Prepare sequence sorted by id if available
+    if 'id' in df.columns:
+        seq_df = df[['id', 'result', 'timestamp']].dropna(subset=['result']).copy()
+        seq_df = seq_df.sort_values('id')
+    else:
+        seq_df = df[['result', 'timestamp']].dropna(subset=['result']).copy()
+        seq_df = seq_df.reset_index(drop=True)
+
+    seq_df = seq_df.reset_index(drop=True)
+    seq_df['game_index'] = seq_df.index + 1
+    n = len(seq_df)
+    if n < window:
+        return pd.DataFrame()
+
+    rows = []
+    for i in range(window - 1, n):
+        window_df = seq_df.iloc[i - window + 1 : i + 1]
+        nums = window_df['result'].astype(int)
+        freq = nums.value_counts().sort_index()
+        repeated = freq[freq > 1]
+        has_rep = not repeated.empty
+        repeated_str = ', '.join(f'{num}×{cnt}' for num, cnt in repeated.items())
+
+        rows.append(
+            {
+                'Window #': i - window + 2,  # 1-based
+                'Start game #': int(window_df['game_index'].iloc[0]),
+                'End game #': int(window_df['game_index'].iloc[-1]),
+                'Has repetition': 'YES' if has_rep else 'NO',
+                'Unique count': int(freq.size),
+                'Numbers (old→new)': ', '.join(str(x) for x in nums.tolist()),
+                'Repeated detail': repeated_str,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def style_status_chip(row):
+    """
+    Style the 'Status' column as a color chip based on repetition.
+    """
+    styles = [''] * len(row)
+    cols = list(row.index)
+
+    if 'Status' in cols and 'Has repetition' in cols:
+        idx = cols.index('Status')
+        if row['Has repetition'] == 'YES':
+            # Red chip for repetition
+            styles[idx] = (
+                'background-color: #fee2e2; '
+                'color: #991b1b; '
+                'font-weight: bold; '
+                'text-align: center; '
+                'border-radius: 999px; '
+                'padding: 4px 8px; '
+                'border: 1px solid #fecaca;'
+            )
+        else:
+            # Green chip for all-unique
+            styles[idx] = (
+                'background-color: #dcfce7; '
+                'color: #166534; '
+                'font-weight: bold; '
+                'text-align: center; '
+                'border-radius: 999px; '
+                'padding: 4px 8px; '
+                'border: 1px solid #bbf7d0;'
+            )
+    return styles
+
+
 # ---------------- UI -----------------
 st.set_page_config(page_title='Lucky 28 Pro Dashboard', layout='wide')
 st.title('🎰 Lucky 28 – Pro History Dashboard')
@@ -207,7 +287,15 @@ top_n = st.sidebar.slider('Top N hot/cold numbers', 3, 10, 5)
 
 page = st.sidebar.radio(
     'Page',
-    ['Dashboard', 'Number Breakdown', 'Streaks & Probabilities', 'Combo Sequences', 'Streak Simulator', 'Raw Data'],
+    [
+        'Dashboard',
+        'Number Breakdown',
+        'Streaks & Probabilities',
+        'Combo Sequences',
+        '10-Game Repetition',
+        'Streak Simulator',
+        'Raw Data',
+    ],
 )
 
 recent_series = df['result'].tail(last_n)
@@ -326,7 +414,6 @@ elif page == 'Streaks & Probabilities':
         st.write('No repetitions.')
     else:
         st.dataframe(recent_repeated, use_container_width=False)
-
 
 elif page == 'Combo Sequences':
     st.header('🔗 Combo Sequences (SO / SE / BO / BE)')
@@ -488,6 +575,77 @@ elif page == 'Combo Sequences':
         )
     else:
         st.info('No combo data available in current filter.')
+
+elif page == '10-Game Repetition':
+    st.header('🔁 10-Game Window Repetition Analysis')
+
+    WINDOW_SIZE = 10
+    rep_df = window_repetition_analysis(df, window=WINDOW_SIZE)
+
+    if rep_df.empty:
+        st.info(f'Not enough data (need at least {WINDOW_SIZE} games after filters).')
+    else:
+        # Add a status label for chips
+        rep_df['Status'] = rep_df['Has repetition'].map(
+            lambda v: '🔴 Repeat' if v == 'YES' else '🟢 All Unique'
+        )
+
+        total_windows = len(rep_df)
+        with_rep = (rep_df['Has repetition'] == 'YES').sum()
+        no_rep = total_windows - with_rep
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric('Total windows', total_windows)
+        with c2:
+            st.metric('With repetition', with_rep)
+        with c3:
+            st.metric('All-unique windows', no_rep)
+
+        st.markdown('---')
+        st.subheader(f'Latest window (last {WINDOW_SIZE} games)')
+
+        latest = rep_df.iloc[-1]
+        st.write(f"Window #: **{latest['Window #']}**")
+        st.write(f"Games: **{latest['Start game #']} → {latest['End game #']}**")
+        st.write(f"Status: {latest['Status']}")
+        st.write(f"Numbers (old→new): `{latest['Numbers (old→new)']}`")
+        st.write(f"Has repetition: **{latest['Has repetition']}**")
+        if latest['Has repetition'] == 'YES' and latest['Repeated detail']:
+            st.write(f"Repeated numbers: **{latest['Repeated detail']}**")
+        else:
+            st.write('No repeated numbers in this 10-game window.')
+
+        st.markdown('---')
+        st.subheader('Recent windows overview')
+
+        # Show most recent windows at top
+        show_n = st.slider('Show last N windows', 10, min(200, total_windows), 50, step=10)
+
+        display_cols = [
+            'Window #',
+            'Status',
+            'Start game #',
+            'End game #',
+            'Has repetition',
+            'Unique count',
+            'Numbers (old→new)',
+            'Repeated detail',
+        ]
+
+        recent_df = rep_df[display_cols].tail(show_n).sort_values('Window #', ascending=False)
+        styled_recent = recent_df.style.apply(style_status_chip, axis=1)
+        st.dataframe(styled_recent, use_container_width=True, height=400)
+
+        st.markdown('---')
+        st.subheader('Only all-unique windows (optional)')
+        unique_only = rep_df[rep_df['Has repetition'] == 'NO']
+        if unique_only.empty:
+            st.write('No all-unique 10-game windows found in current filter.')
+        else:
+            unique_df = unique_only[display_cols].tail(show_n).sort_values('Window #', ascending=False)
+            styled_unique = unique_df.style.apply(style_status_chip, axis=1)
+            st.dataframe(styled_unique, use_container_width=True, height=300)
 
 elif page == 'Streak Simulator':
     st.header('🧪 Streak Continuation Simulator')
