@@ -1,4 +1,5 @@
 *.pyc
-/venv
+/.venv
 django_lucky28/gameapp/.DS_Store
 .DS_Store
+.venv
