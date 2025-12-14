@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+{% load humanize %}
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game History</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f7f8fa;
+            margin: 0;
+            padding: 0;
+            max-width: 480px;
+            /* Mobile width simulation */
+            margin: 0 auto;
+            border: 1px solid #ebedf0;
+            min-height: 100vh;
+        }
+
+        /* Sticky Header */
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            background: #fff;
+            z-index: 100;
+        }
+
+        /* Top Navigation */
+        .nav-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #ebedf0;
+        }
+
+        .nav-item {
+            font-size: 16px;
+            font-weight: 500;
+            color: #646566;
+            margin: 0 15px;
+            padding-bottom: 5px;
+            cursor: pointer;
+        }
+
+        .nav-item.active {
+            color: #323233;
+            font-weight: bold;
+            border-bottom: 3px solid #8e2de2;
+            /* Approximate purple */
+        }
+
+        .back-icon {
+            position: absolute;
+            left: 15px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        /* Filter Section */
+        .filter-container {
+            padding: 10px 15px;
+            background: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .date-picker {
+            padding: 5px 10px;
+            border: 1px solid #ebedf0;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #323233;
+            outline: none;
+        }
+
+        /* Toggle Button */
+        .toggle-container {
+            padding: 10px 15px;
+            background: #fff;
+        }
+
+        .toggle-wrapper {
+            display: flex;
+            background: #f7f8fa;
+            border-radius: 20px;
+            overflow: hidden;
+            padding: 2px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            text-align: center;
+            padding: 6px 0;
+            font-size: 14px;
+            color: #969799;
+            border-radius: 18px;
+            cursor: pointer;
+        }
+
+        .toggle-btn.active {
+            background: linear-gradient(to right, #bf54f2, #944af7);
+            color: #fff;
+        }
+
+        /* Table Header */
+        .table-header {
+            display: flex;
+            padding: 10px 0;
+            background: #fff;
+            font-size: 12px;
+            color: #969799;
+            font-weight: normal;
+            border-bottom: 1px solid #ebedf0;
+        }
+
+        .col {
+            flex: 1;
+            text-align: center;
+        }
+
+        /* List Styling */
+        .table_box {
+            padding-bottom: 20px;
+        }
+
+        .van-cell-group {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            font-size: 13px;
+        }
+
+        /* Zebra Striping */
+        .van-cell-group:nth-child(even) {
+            background-color: #f7f8fa;
+        }
+
+        .van-cell-group:nth-child(odd) {
+            background-color: #fff;
+        }
+
+        .time {
+            flex: 1;
+            text-align: center;
+            color: #969799;
+            font-size: 12px;
+        }
+
+        .result {
+            flex: 1;
+            text-align: center;
+            color: #323233;
+            font-weight: 500;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .result div {
+            font-size: 10px;
+            color: #969799;
+            margin-top: 2px;
+        }
+
+        .winners {
+            flex: 1;
+            text-align: center;
+            color: #323233;
+            font-weight: bold;
+        }
+
+        .prizes {
+            flex: 1.2;
+            text-align: center;
+            color: #f5a623;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .diamond {
+            width: 14px;
+            height: 14px;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            color: #969799;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sticky-header">
+        <div class="nav-header">
+            <span class="back-icon">←</span>
+            <div class="nav-item">Rank</div>
+            <div class="nav-item active">History</div>
+        </div>
+
+        <div class="filter-container">
+            <form method="get" action="">
+                <input type="date" name="date" class="date-picker" value="{{ selected_date|default:today }}"
+                    onchange="this.form.submit()">
+            </form>
+        </div>
+
+        <div class="toggle-container">
+            <div class="toggle-wrapper">
+                <div class="toggle-btn active">All</div>
+                <div class="toggle-btn">My</div>
+            </div>
+        </div>
+        <div class="table-header">
+            <div class="col">Time</div>
+            <div class="col">Result</div>
+            <div class="col">Winners</div>
+            <div class="col">Prizes</div>
+        </div>
+    </div>
+
+    <div id="app-content" class="table_box">
+        {% for item in results %}
+        <div class="van-cell-group">
+            <div class="time">{{ item.timestamp|date:"H:i" }}</div>
+            <div class="result">
+                {{ item.result }}
+                <div>({{ item.size_group|slice:":1" }}/{{ item.parity_group|slice:":1" }})</div>
+            </div>
+            <div class="winners">
+                {% if item.winners_count %}
+                {{ item.winners_count }}
+                {% else %}
+                -
+                {% endif %}
+            </div>
+            <div class="prizes">
+                <img class="diamond" src="https://webapp.chametw.com/_nuxt/diamond.B_IneHNi.png" alt="diamond">
+                {% if item.prize_amount %}
+                {{ item.prize_amount|intcomma }}
+                {% else %}
+                -
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            No results found for this date.
+        </div>
+        {% endfor %}
+    </div>
+
+</body>
+
+</html>

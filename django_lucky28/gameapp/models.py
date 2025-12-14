@@ -18,6 +18,8 @@ class GameResult(models.Model):
     result = models.IntegerField(help_text='Final number 0–27')
     timestamp = models.DateTimeField(null=True, blank=True)
     source_file = models.CharField(max_length=255, blank=True)
+    winners_count = models.IntegerField(null=True, blank=True)
+    prize_amount = models.BigIntegerField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     import_batch = models.ForeignKey(ImportBatch, null=True, blank=True,

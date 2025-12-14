@@ -127,7 +127,7 @@ def streaks(series: pd.Series):
             longest_label = prev
         current_label = labels.iloc[-1]
         current_len = 1
-        for lab in reversed(labels[:-1]):
+        for lab in labels.iloc[:-1].iloc[::-1]:
             if lab == current_label:
                 current_len += 1
             else:

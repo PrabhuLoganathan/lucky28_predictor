@@ -18,6 +18,9 @@ class GameResultAdmin(admin.ModelAdmin):
         'parity_group',
         'combo_group',
         'timestamp',
+        'timestamp',
+        'winners_count',
+        'prize_amount',
         'source_file',
         'created_at',
     )
@@ -69,15 +72,42 @@ class GameResultAdmin(admin.ModelAdmin):
                         val = int(row[0])
                         if not (0 <= val <= 27):
                             raise ValueError('Result must be 0–27')
+                        
+                        # Optional fields
+                        w_count = None
+                        p_amount = None
+                        
+                        # Try to find specific columns if header exists and has enough columns
+                        # This simple logic assumes the structure: Result, [Timestamp/Ignored], Winners, Prizes
+                        # Or just tries to parse specific indices if row is long enough
+                        # Let's try to be smart about column indices if header is present
+                        
+                        # Basic fallback: 
+                        # col 0: Result
+                        # col 1: Winners (optional)
+                        # col 2: Prizes (optional)
+                        
+                        if len(row) > 1 and row[1].strip().isdigit():
+                            w_count = int(row[1])
+                        
+                        if len(row) > 2:
+                            # Cleanup currency strings like "22,551,671"
+                            p_str = row[2].replace(',', '').strip()
+                            if p_str.isdigit():
+                                p_amount = int(p_str)
+
                         ts = base_ts - timedelta(minutes=offset)
                         GameResult.objects.create(
                             result=val,
                             timestamp=ts,
                             source_file=csv_file.name,
                             import_batch=batch,
+                            winners_count=w_count,
+                            prize_amount=p_amount,
                         )
                         success += 1
-                    except Exception:
+                    except Exception as e:
+                        # print(f"Row failed: {row} - {e}")
                         failed += 1
 
                 batch.total_rows = total
