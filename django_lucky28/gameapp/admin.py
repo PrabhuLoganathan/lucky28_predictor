@@ -60,43 +60,74 @@ class GameResultAdmin(admin.ModelAdmin):
                     )
                     return redirect('admin:gameapp_gameresult_changelist')
 
+                # Identify column indices
+                header_map = {col.strip().lower(): i for i, col in enumerate(header)}
+                
                 batch = ImportBatch.objects.create(file_name=csv_file.name)
+                # Keep base_ts as fallback
                 base_ts = timezone.now()
 
                 total = success = failed = 0
                 for offset, row in enumerate(reader):
-                    if not row or not row[0].strip():
+                    if not row:
                         continue
                     total += 1
                     try:
-                        val = int(row[0])
+                        # Extract Result
+                        # We assume 'result' is at index 0 as enforced above, or look it up
+                        idx_res = header_map.get('result', 0)
+                        if idx_res >= len(row): raise ValueError("Missing result column")
+                        
+                        val = int(row[idx_res])
                         if not (0 <= val <= 27):
                             raise ValueError('Result must be 0–27')
                         
-                        # Optional fields
+                        # Extract Timestamp
+                        ts = None
+                        if 'timestamp' in header_map:
+                            ts_str = row[header_map['timestamp']].strip()
+                            if ts_str:
+                                # Try parsing ISO format "2025-12-14 21:37:00"
+                                try:
+                                    # naive parse
+                                    from datetime import datetime
+                                    dt = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
+                                    if timezone.is_aware(timezone.now()):
+                                        ts = timezone.make_aware(dt)
+                                    else:
+                                        ts = dt
+                                except ValueError:
+                                    pass
+                        
+                        # Fallback timestamp
+                        if not ts:
+                            ts = base_ts - timedelta(minutes=offset)
+
+                        # Extract Winners
                         w_count = None
+                        if 'winners_count' in header_map:
+                            idx = header_map['winners_count']
+                            if idx < len(row) and row[idx].strip().isdigit():
+                                w_count = int(row[idx])
+                        elif 'winners' in header_map: # Alias
+                            idx = header_map['winners']
+                            if idx < len(row) and row[idx].strip().isdigit():
+                                w_count = int(row[idx])
+                            
+                        # Extract Prizes
                         p_amount = None
-                        
-                        # Try to find specific columns if header exists and has enough columns
-                        # This simple logic assumes the structure: Result, [Timestamp/Ignored], Winners, Prizes
-                        # Or just tries to parse specific indices if row is long enough
-                        # Let's try to be smart about column indices if header is present
-                        
-                        # Basic fallback: 
-                        # col 0: Result
-                        # col 1: Winners (optional)
-                        # col 2: Prizes (optional)
-                        
-                        if len(row) > 1 and row[1].strip().isdigit():
-                            w_count = int(row[1])
-                        
-                        if len(row) > 2:
-                            # Cleanup currency strings like "22,551,671"
-                            p_str = row[2].replace(',', '').strip()
+                        if 'prize_amount' in header_map:
+                            idx = header_map['prize_amount']
+                        elif 'prizes' in header_map:
+                            idx = header_map['prizes']
+                        else:
+                            idx = -1
+                            
+                        if idx != -1 and idx < len(row):
+                            p_str = row[idx].replace(',', '').strip()
                             if p_str.isdigit():
                                 p_amount = int(p_str)
 
-                        ts = base_ts - timedelta(minutes=offset)
                         GameResult.objects.create(
                             result=val,
                             timestamp=ts,
