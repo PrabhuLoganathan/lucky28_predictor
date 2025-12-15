@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}Game Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Game Dashboard</h1>
+    <div>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newGameModal">+ New Game</button>
+        <span class="badge bg-secondary ms-2">Showing latest 50 games</span>
+    </div>
+</div>
+
+<!-- New Game Modal -->
+<div class="modal fade" id="newGameModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Start New Game</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newGameForm">
+                    <div class="mb-3">
+                        <label class="form-label">Game No</label>
+                        <input type="text" class="form-control" name="game_no" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Latest Statistic</label>
+                        <input type="text" class="form-control" name="latest_statistic" placeholder="e.g. 2B/1E">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Big</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_big">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Small</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_small">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Even</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_even">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Odd</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_odd">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="createGame()">Create Game</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Game No</th>
+                                <th>Latest Stat</th>
+                                <th>Pre Rates (B/S/E/O)</th>
+                                <th>Result</th>
+                                <th>Status</th>
+                                <th>Timestamp</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for game in games %}
+                            <tr>
+                                <td class="fw-bold">{{ game.game_no }}</td>
+                                <td>{{ game.latest_statistic|default:"-" }}</td>
+                                <td>
+                                    {% if game.rate_big %}
+                                    <small>
+                                        B:{{ game.rate_big }}% S:{{ game.rate_small }}%<br>
+                                        E:{{ game.rate_even }}% O:{{ game.rate_odd }}%
+                                    </small>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if game.winning_number is not None %}
+                                    <span class="badge bg-primary fs-6">{{ game.winning_number }}</span>
+                                    <br><small class="text-muted">{{ game.reward_type }}</small>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if game.has_winner %}
+                                    <span class="badge badge-status-winner">Winner</span>
+                                    {% elif game.has_pre %}
+                                    <span class="badge badge-status-pending">Pending</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted small">
+                                    {{ game.created_at|date:"M d, H:i:s" }}
+                                </td>
+                                <td>
+                                    <a href="{% url 'game_detail' game.game_no %}"
+                                        class="btn btn-sm btn-outline-primary">View</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4">No games found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function createGame() {
+        const form = document.getElementById('newGameForm');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Basic validation
+        if (!data.game_no) {
+            alert('Game No is required');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/games/pre/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                const err = await response.json();
+                alert('Error creating game: ' + JSON.stringify(err));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to create game');
+        }
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

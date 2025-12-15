@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+
+{% block title %}Game {{ game_no }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'game_dashboard' %}" class="text-decoration-none">&larr; Back to Dashboard</a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Game #<span id="gameNo">{{ game_no }}</span></h1>
+    <div>
+        <span id="statusBadge" class="badge bg-secondary fs-5">Loading...</span>
+        <button id="refreshBtn" class="btn btn-sm btn-light ms-2" onclick="fetchGameData()">Of</button>
+        <button class="btn btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#updatePreModal">Edit Pre</button>
+        <button class="btn btn-success ms-2" data-bs-toggle="modal" data-bs-target="#declareWinnerModal">Declare
+            Winner</button>
+    </div>
+</div>
+
+<!-- Update Pre Modal -->
+<div class="modal fade" id="updatePreModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Pre-Game Data</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="updatePreForm">
+                    <input type="hidden" name="game_no" value="{{ game_no }}">
+                    <div class="mb-3">
+                        <label class="form-label">Latest Statistic</label>
+                        <input type="text" class="form-control" name="latest_statistic" id="inputLatestStat">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Big</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_big" id="inputRateBig">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Small</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_small" id="inputRateSmall">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Even</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_even" id="inputRateEven">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Rate Odd</label>
+                            <input type="number" step="0.01" class="form-control" name="rate_odd" id="inputRateOdd">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="submitPreUpdate()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Declare Winner Modal -->
+<div class="modal fade" id="declareWinnerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Declare Winner</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="declareWinnerForm">
+                    <div class="mb-3">
+                        <label class="form-label">Winning Number</label>
+                        <input type="number" class="form-control" name="winning_number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reward Type</label>
+                        <input type="text" class="form-control" name="reward_type" placeholder="e.g. Big/Even">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reward Numbers (comma separated)</label>
+                        <input type="text" class="form-control" name="reward_numbers_str" placeholder="e.g. 5,4,9">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Winners Count</label>
+                            <input type="number" class="form-control" name="winner_count">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Total Win Energy</label>
+                            <input type="number" class="form-control" name="win_total_energy">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" onclick="submitWinner()">Declare Winner</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Statistic & Rates Card -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-warning text-dark fw-bold">Pre-Game Statistics</div>
+            <div class="card-body">
+                <h5 class="card-title">Latest Statistic: <span id="latestStat" class="text-primary">-</span></h5>
+                <hr>
+                <div class="row text-center">
+                    <div class="col-6 mb-3">
+                        <div class="display-6" id="rateBig">-</div>
+                        <small>Big Rate</small>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="display-6" id="rateSmall">-</div>
+                        <small>Small Rate</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="display-6" id="rateEven">-</div>
+                        <small>Even Rate</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="display-6" id="rateOdd">-</div>
+                        <small>Odd Rate</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Card -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100 border-primary">
+            <div class="card-header bg-primary text-white fw-bold">Winner Result</div>
+            <div class="card-body text-center" id="winnerSection" style="display:none;">
+                <div class="display-1 fw-bold text-primary mb-2" id="winningNumber">-</div>
+                <h4 class="text-muted mb-3" id="rewardType">-</h4>
+
+                <div class="d-flex justify-content-center gap-2 mb-4">
+                    <span class="badge bg-info" id="rewardN1">-</span>
+                    <span class="badge bg-info" id="rewardN2">-</span>
+                    <span class="badge bg-info" id="rewardN3">-</span>
+                </div>
+
+                <ul class="list-group list-group-flush text-start">
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Winners Count</span>
+                        <strong id="winnerCount">-</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Total Win Energy</span>
+                        <strong id="winEnergy">-</strong>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>Net System Energy</span>
+                        <strong id="netEnergy">-</strong>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="card-body d-flex align-items-center justify-content-center" id="pendingSection">
+                <div class="text-center text-muted">
+                    <div class="spinner-grow text-warning mb-2" role="status"></div>
+                    <p>Waiting for winner...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">Raw Data</div>
+    <div class="card-body">
+        <pre class="bg-light p-3 border rounded" id="debugJson" style="max-height: 200px;">Loading...</pre>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const gameNo = "{{ game_no }}";
+    const apiEndpoint = `/api/games/${gameNo}/`;
+    let intervalId = null;
+
+    async function fetchGameData() {
+        try {
+            const response = await fetch(apiEndpoint);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const data = await response.json();
+            updateUI(data);
+        } catch (error) {
+            console.error('Error fetching game data:', error);
+        }
+    }
+
+    function updateUI(data) {
+        // Status
+        const badge = document.getElementById('statusBadge');
+        if (data.has_winner) {
+            badge.className = 'badge bg-success fs-5';
+            badge.textContent = 'Winner Announced';
+        } else if (data.has_pre) {
+            badge.className = 'badge bg-warning text-dark fs-5';
+            badge.textContent = 'Pending Result';
+        } else {
+            badge.className = 'badge bg-secondary fs-5';
+            badge.textContent = 'Unknown';
+        }
+
+        // Pre Stats
+        document.getElementById('latestStat').textContent = data.latest_statistic || '-';
+        document.getElementById('rateBig').textContent = data.rate_big ? data.rate_big + '%' : '-';
+        document.getElementById('rateSmall').textContent = data.rate_small ? data.rate_small + '%' : '-';
+        document.getElementById('rateEven').textContent = data.rate_even ? data.rate_even + '%' : '-';
+        document.getElementById('rateOdd').textContent = data.rate_odd ? data.rate_odd + '%' : '-';
+
+        // Populate Update Form
+        document.getElementById('inputLatestStat').value = data.latest_statistic || '';
+        document.getElementById('inputRateBig').value = data.rate_big || '';
+        document.getElementById('inputRateSmall').value = data.rate_small || '';
+        document.getElementById('inputRateEven').value = data.rate_even || '';
+        document.getElementById('inputRateOdd').value = data.rate_odd || '';
+
+        // Winner Stats
+        if (data.has_winner) {
+            document.getElementById('winnerSection').style.display = 'block';
+            document.getElementById('pendingSection').style.display = 'none';
+
+            document.getElementById('winningNumber').textContent = data.winning_number;
+            document.getElementById('rewardType').textContent = data.reward_type;
+
+            if (data.reward_numbers && Array.isArray(data.reward_numbers)) {
+                if (data.reward_numbers[0]) document.getElementById('rewardN1').textContent = data.reward_numbers[0];
+                if (data.reward_numbers[1]) document.getElementById('rewardN2').textContent = data.reward_numbers[1];
+                if (data.reward_numbers[2]) document.getElementById('rewardN3').textContent = data.reward_numbers[2];
+            }
+
+            document.getElementById('winnerCount').textContent = data.winner_count;
+            document.getElementById('winEnergy').textContent = parseInt(data.win_total_energy || 0).toLocaleString();
+            document.getElementById('netEnergy').textContent = parseInt(data.net_energy_system || 0).toLocaleString();
+        } else {
+            document.getElementById('winnerSection').style.display = 'none';
+            document.getElementById('pendingSection').style.display = 'flex';
+        }
+
+        // Debug
+        document.getElementById('debugJson').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function submitPreUpdate() {
+        const form = document.getElementById('updatePreForm');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch('/api/games/pre/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('updatePreModal'));
+                modal.hide();
+                fetchGameData();
+            } else {
+                alert('Update failed');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error updating');
+        }
+    }
+
+    async function submitWinner() {
+        const form = document.getElementById('declareWinnerForm');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        // Transform reward numbers string to array
+        if (data.reward_numbers_str) {
+            data.reward_numbers = data.reward_numbers_str.split(',').map(s => parseInt(s.trim()));
+            delete data.reward_numbers_str;
+        }
+
+        data.status = 3; // Finished
+        data.has_winner = true;
+
+        try {
+            const response = await fetch(`/api/games/${gameNo}/winner/`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('declareWinnerModal'));
+                modal.hide();
+                fetchGameData();
+            } else {
+                alert('Winner declaration failed');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error declaring winner');
+        }
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Initial load
+    fetchGameData();
+
+    // Poll every 3 seconds
+    intervalId = setInterval(fetchGameData, 3000);
+</script>
+{% endblock %}
