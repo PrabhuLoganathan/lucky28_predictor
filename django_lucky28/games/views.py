@@ -72,7 +72,14 @@ def update_winner(request, game_no):
     obj.has_winner = True
     obj.save()
 
-    # WhatsApp Notification
+    # 1. Run Signal Detection (Metrics & Alerts)
+    try:
+        from .services.signals import SignalAnalyzer
+        SignalAnalyzer().analyze_game(obj)
+    except Exception as e:
+        print(f"Signal Analyzer Error: {e}")
+
+    # 2. WhatsApp Winner Notification
     # Trigger only if we have a winner and notification is enabled/valid
     if obj.has_winner:
         try:
@@ -103,3 +110,75 @@ class GameRoundRetrieve(RetrieveAPIView):
 class GameRoundList(ListAPIView):
     serializer_class = GameRoundSerializer
     queryset = GameRound.objects.all().order_by("-created_at")
+
+# Signals UI
+def signals_dashboard(request):
+    from .models import SignalLog, SignalRule
+    from .services.signals import SignalAnalyzer
+
+    # Get recent logs
+    recent_signals = SignalLog.objects.select_related('rule', 'game').order_by('-triggered_at')[:20]
+    
+    # Calculate Live Streaks for display (Re-using logic from Analyzer)
+    # We'll just fetch brief history and run the calculator
+    history = GameRound.objects.filter(
+        has_winner=True, 
+        winning_number__isnull=False
+    ).order_by('-winner_event_ts')[:100]
+    
+    current_stats = SignalAnalyzer()._calculate_current_stats(history)
+    
+    # Format stats for template: Separating Streaks and Droughts
+    streaks = {k:v for k,v in current_stats.items() if k.startswith('STREAK')}
+    droughts = {k:v for k,v in current_stats.items() if k.startswith('DROUGHT')}
+
+    return render(request, "games/signals_dashboard.html", {
+        "recent_signals": recent_signals,
+        "streaks": streaks,
+        "droughts": droughts
+    })
+
+def signals_config(request):
+    from .models import SignalRule
+    rules = SignalRule.objects.all().order_by('dimension', 'name')
+    return render(request, "games/signals_config.html", {
+        "rules": rules,
+        "dimensions": SignalRule.DIMENSIONS,
+        "rule_types": SignalRule.RULE_TYPES,
+        "severities": SignalRule.SEVERITY
+    })
+
+@api_view(["POST"])
+def signals_config_action(request, action):
+    from .models import SignalRule
+    
+    if action == "add":
+        try:
+            SignalRule.objects.create(
+                name=request.data.get("name"),
+                rule_type=request.data.get("rule_type"),
+                dimension=request.data.get("dimension"),
+                target_value=request.data.get("target_value"),
+                threshold=int(request.data.get("threshold")),
+                severity=request.data.get("severity")
+            )
+            return Response({"success": True})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+    elif action == "delete":
+        rule_id = request.data.get("id")
+        SignalRule.objects.filter(id=rule_id).delete()
+        return Response({"success": True})
+
+    elif action == "toggle":
+        rule_id = request.data.get("id")
+        try:
+            rule = SignalRule.objects.get(id=rule_id)
+            rule.is_active = not rule.is_active
+            rule.save()
+            return Response({"success": True, "is_active": rule.is_active})
+        except SignalRule.DoesNotExist:
+            return Response({"error": "Rule not found"}, status=404)
+
+    return Response({"error": "Invalid action"}, status=400)

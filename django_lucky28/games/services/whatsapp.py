@@ -17,7 +17,34 @@ class WhatsAppService:
             self.client = Client(self.account_sid, self.auth_token)
         else:
             self.client = None
-            logger.warning("Twilio credentials not found. WhatsAppService disabled.")
+    def send_message_raw(self, to_number, body_text):
+        """
+        Sends a raw text message. Does NOT handle fallback to template 
+        (because templates are specific structures).
+        Best effort delivery primarily for ALERTING within 24h window.
+        """
+        if not self.client or not self.from_number:
+            return False
+
+        if not to_number.startswith("whatsapp:"):
+            to_number = f"whatsapp:{to_number}"
+        
+        if not self.from_number.startswith("whatsapp:"):
+            from_ = f"whatsapp:{self.from_number}"
+        else:
+            from_ = self.from_number
+
+        try:
+            self.client.messages.create(
+                from_=from_,
+                to=to_number,
+                body=body_text
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send raw WhatsApp: {e}")
+            return False
+
 
     def send_winner_notification(self, to_number, game_round):
         """

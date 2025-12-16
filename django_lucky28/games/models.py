@@ -39,3 +39,31 @@ class GameRound(models.Model):
 
     def __str__(self):
         return f"{self.game_no} ({'winner' if self.has_winner else 'pending'})"
+
+class SignalRule(models.Model):
+    RULE_TYPES = [('STREAK', 'Streak'), ('DROUGHT', 'Drought')]
+    DIMENSIONS = [('BIG_SMALL', 'Big/Small'), ('ODD_EVEN', 'Odd/Even'), ('COLOR', 'Color')]
+    SEVERITY = [('INFO', 'Info'), ('WARNING', 'Warning'), ('CRITICAL', 'Critical')]
+
+    name = models.CharField(max_length=100) # e.g. "6 Big Streak"
+    rule_type = models.CharField(max_length=20, choices=RULE_TYPES)
+    dimension = models.CharField(max_length=20, choices=DIMENSIONS)
+    target_value = models.CharField(max_length=50) # "Big", "Red", "Odd"
+    threshold = models.IntegerField() # e.g. 6, 15
+    severity = models.CharField(max_length=20, choices=SEVERITY, default='INFO')
+    is_active = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.threshold})"
+
+class SignalLog(models.Model):
+    game = models.ForeignKey(GameRound, on_delete=models.CASCADE, related_name='signals')
+    rule = models.ForeignKey(SignalRule, on_delete=models.CASCADE)
+    value = models.IntegerField() # The actual streak/drought length triggering this
+    triggered_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.rule.name} @ Game {self.game.game_no}"
+

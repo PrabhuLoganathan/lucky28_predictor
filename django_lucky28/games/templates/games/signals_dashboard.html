@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}Signal Monitor{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-0">Signal Monitor</h1>
+        <p class="text-secondary mb-0">Live Probability Engine</p>
+    </div>
+    <div>
+        <a href="{% url 'signals_config' %}" class="btn btn-outline-light">Configure Rules</a>
+    </div>
+</div>
+
+<div class="row g-4 mb-5">
+    <!-- Active Streaks -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header text-primary">Live Streaks</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% for key, val in streaks.items %}
+                    <div class="col-6">
+                        <div class="p-3 border border-secondary rounded bg-dark">
+                            <small class="text-secondary d-block">{{ key|slice:"7:" }} Streak</small>
+                            <span class="fs-4 fw-bold text-white">{{ val }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Droughts -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header text-warning">Live Droughts (Missing For)</div>
+            <div class="card-body">
+                <div class="table-responsive" style="max-height: 250px;">
+                    <table class="table table-sm table-borderless text-white mb-0">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase">
+                                <th>Target</th>
+                                <th class="text-end">Missing Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for key, val in droughts.items %}
+                            <tr>
+                                <td>{{ key|slice:"8:" }}</td>
+                                <td class="text-end fw-mono">{{ val }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Signal Logs -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Recent Alerts</span>
+        <span class="badge bg-dark border border-secondary text-secondary">Last 20</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="text-secondary text-uppercase fs-7">
+                    <tr>
+                        <th class="ps-4">Time</th>
+                        <th>Rule</th>
+                        <th>Value</th>
+                        <th>Game</th>
+                        <th>Severity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_signals %}
+                    <tr>
+                        <td class="ps-4 text-secondary small">{{ log.triggered_at|date:"H:i:s" }}</td>
+                        <td class="fw-medium text-white">{{ log.rule.name }}</td>
+                        <td class="text-white">{{ log.value }}</td>
+                        <td class="text-secondary">{{ log.game.game_no }}</td>
+                        <td>
+                            {% if log.rule.severity == 'CRITICAL' %}
+                            <span class="badge bg-danger rounded-pill">CRITICAL</span>
+                            {% elif log.rule.severity == 'WARNING' %}
+                            <span class="badge bg-warning text-dark rounded-pill">WARNING</span>
+                            {% else %}
+                            <span class="badge bg-info text-dark rounded-pill">INFO</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">No signals triggered yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -12,4 +12,9 @@ urlpatterns = [
     path("games/dashboard/", views.game_dashboard, name="game_dashboard"),
     path("games/dashboard/rows/", views.game_dashboard_rows, name="game_dashboard_rows"),
     path("games/detail/<str:game_no>/", views.game_detail, name="game_detail"),
+    
+    # Signals
+    path("signals/", views.signals_dashboard, name="signals_dashboard"),
+    path("signals/config/", views.signals_config, name="signals_config"),
+    path("signals/api/config/<str:action>/", views.signals_config_action, name="signals_config_action"),
 ]

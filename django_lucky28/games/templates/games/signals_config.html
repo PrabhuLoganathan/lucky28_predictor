@@ -1,0 +1,253 @@
+{% extends 'base.html' %}
+
+{% block title %}Signal Configuration{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-0">Configuration</h1>
+        <p class="text-secondary mb-0">Manage Detection Rules</p>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newRuleModal">
+        + Add New Rule
+    </button>
+</div>
+
+<!-- Rule List -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="text-secondary text-uppercase fs-7">
+                    <tr>
+                        <th class="ps-4">Rule Name</th>
+                        <th>Type</th>
+                        <th>Dimension</th>
+                        <th>Target</th>
+                        <th>Threshold</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr>
+                        <td class="ps-4 fw-medium text-white">{{ rule.name }}</td>
+
+                        <td>
+                            <span class="badge bg-dark border border-secondary">
+                                {{ rule.get_rule_type_display }}
+                            </span>
+                        </td>
+
+                        <td>{{ rule.get_dimension_display }}</td>
+
+                        <td>{{ rule.target_value }}</td>
+
+                        <td class="fw-bold">{{ rule.threshold }}</td>
+
+                        <td>
+                            <span class="badge
+                                {% if rule.severity == 'CRITICAL' %}
+                                    bg-danger
+                                {% elif rule.severity == 'WARNING' %}
+                                    bg-warning text-dark
+                                {% else %}
+                                    bg-info text-dark
+                                {% endif %}
+                            ">
+                                {{ rule.get_severity_display }}
+                            </span>
+                        </td>
+
+                        <td>
+                            <div class="form-check form-switch">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    onchange="toggleRule({{ rule.id }})"
+                                    {% if rule.is_active %}checked{% endif %}
+                                >
+                            </div>
+                        </td>
+
+                        <td class="text-end pe-4">
+                            <button
+                                class="btn btn-sm btn-outline-danger"
+                                onclick="deleteRule({{ rule.id }})">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            No rules defined. Add one to start monitoring.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Rule Modal -->
+<div class="modal fade" id="newRuleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Define New Rule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <form id="newRuleForm">
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">Rule Name</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            name="name"
+                            required
+                            placeholder="e.g. 10 Big Streak"
+                        >
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label text-secondary">Type</label>
+                            <select class="form-select" name="rule_type">
+                                {% for k, v in rule_types %}
+                                <option value="{{ k }}">{{ v }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-secondary">Dimension</label>
+                            <select class="form-select" name="dimension">
+                                {% for k, v in dimensions %}
+                                <option value="{{ k }}">{{ v }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label text-secondary">Target Value</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                name="target_value"
+                                required
+                                placeholder="Big, Red, Odd..."
+                            >
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-secondary">Threshold</label>
+                            <input
+                                type="number"
+                                class="form-control"
+                                name="threshold"
+                                required
+                                value="6"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label text-secondary">Severity</label>
+                        <select class="form-select" name="severity">
+                            {% for k, v in severities %}
+                            <option value="{{ k }}">{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary"
+                    data-bs-dismiss="modal">
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    class="btn btn-primary"
+                    onclick="submitRule()">
+                    Save Rule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.startsWith(name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function submitRule() {
+    const form = document.getElementById('newRuleForm');
+    const data = Object.fromEntries(new FormData(form).entries());
+
+    const res = await fetch('/games/signals/api/config/add/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (res.ok) window.location.reload();
+    else alert('Failed to add rule');
+}
+
+async function deleteRule(id) {
+    if (!confirm('Delete this rule?')) return;
+
+    const res = await fetch('/games/signals/api/config/delete/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ id })
+    });
+
+    if (res.ok) window.location.reload();
+}
+
+async function toggleRule(id) {
+    await fetch('/games/signals/api/config/toggle/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ id })
+    });
+}
+</script>
+{% endblock %}
