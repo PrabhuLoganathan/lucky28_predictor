@@ -8,7 +8,10 @@ def main():
     env_path = Path(__file__).resolve().parent.parent / '.env'
     load_dotenv(dotenv_path=env_path)
     
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE','lucky28_backend.settings')
+    # Add 'apps' folder to sys.path
+    sys.path.append(str(Path(__file__).resolve().parent / 'apps'))
+
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings')
     from django.core.management import execute_from_command_line
     execute_from_command_line(sys.argv)
 if __name__ == '__main__':

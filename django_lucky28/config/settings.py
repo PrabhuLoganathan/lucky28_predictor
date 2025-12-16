@@ -1,5 +1,11 @@
 from pathlib import Path
+import sys
+import os
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Add 'apps' to sys.path
+sys.path.append(str(BASE_DIR / 'apps'))
 
 SECRET_KEY = 'lucky28-temp-key'
 DEBUG = True
@@ -28,7 +34,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'lucky28_backend.urls'
+ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [{
     'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -44,8 +50,8 @@ TEMPLATES = [{
     },
 }]
 
-WSGI_APPLICATION = 'lucky28_backend.wsgi.application'
-ASGI_APPLICATION = 'lucky28_backend.asgi.application'
+WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
 
 DATABASES = {
     'default': {
