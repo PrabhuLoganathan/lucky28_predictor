@@ -54,6 +54,27 @@ def update_winner(request, game_no):
     obj.has_winner = True
     obj.save()
 
+    # WhatsApp Notification
+    # Trigger only if we have a winner and notification is enabled/valid
+    if obj.has_winner:
+        try:
+            from .services.whatsapp import WhatsAppService
+            import os
+            
+            # Determine Recipient: 
+            # 1. 'customer_phone' in payload
+            # 2. 'ADMIN_PHONE' env var
+            recipient = request.data.get("customer_phone") or os.environ.get("ADMIN_PHONE")
+            
+            if recipient:
+                service = WhatsAppService()
+                service.send_winner_notification(recipient, obj)
+            else:
+                print("Skipping WhatsApp: No recipient number found (provide 'customer_phone' or set ADMIN_PHONE)")
+
+        except Exception as e:
+            print(f"Error triggering WhatsApp notification: {e}")
+
     return Response(GameRoundSerializer(obj).data, status=200)
 
 class GameRoundRetrieve(RetrieveAPIView):
