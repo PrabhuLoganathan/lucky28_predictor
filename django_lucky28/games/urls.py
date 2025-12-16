@@ -8,6 +8,8 @@ urlpatterns = [
     path("api/games/", views.GameRoundList.as_view()),
     
     # UI
+    path("", views.game_dashboard, name="home"),
     path("games/dashboard/", views.game_dashboard, name="game_dashboard"),
+    path("games/dashboard/rows/", views.game_dashboard_rows, name="game_dashboard_rows"),
     path("games/detail/<str:game_no>/", views.game_detail, name="game_detail"),
 ]

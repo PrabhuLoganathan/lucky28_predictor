@@ -3,24 +3,136 @@
 {% block title %}Game {{ game_no }}{% endblock %}
 
 {% block content %}
-<div class="mb-3">
-    <a href="{% url 'game_dashboard' %}" class="text-decoration-none">&larr; Back to Dashboard</a>
+<div class="mb-4">
+    <a href="{% url 'game_dashboard' %}" class="text-decoration-none text-secondary hover-white">
+        &larr; Back to Dashboard
+    </a>
 </div>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Game #<span id="gameNo">{{ game_no }}</span></h1>
     <div>
-        <span id="statusBadge" class="badge bg-secondary fs-5">Loading...</span>
-        <button id="refreshBtn" class="btn btn-sm btn-light ms-2" onclick="fetchGameData()">Of</button>
-        <button class="btn btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#updatePreModal">Edit Pre</button>
-        <button class="btn btn-success ms-2" data-bs-toggle="modal" data-bs-target="#declareWinnerModal">Declare
+        <h1 class="mb-1">Game #<span id="gameNo">{{ game_no }}</span></h1>
+        <span id="statusBadge" class="badge bg-secondary">Loading...</span>
+    </div>
+    <div class="d-flex gap-2">
+        <button id="refreshBtn" class="btn btn-outline-secondary btn-sm" onclick="fetchGameData()">
+            Manual Refresh
+        </button>
+        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#updatePreModal">Edit
+            Pre</button>
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#declareWinnerModal">Declare
             Winner</button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Statistic & Rates Card -->
+    <div class="col-md-5">
+        <div class="card h-100">
+            <div class="card-header text-uppercase fs-7 text-secondary">
+                Pre-Game Statistics
+            </div>
+            <div class="card-body">
+                <div class="mb-4 text-center">
+                    <p class="text-secondary mb-1 text-uppercase fs-7">Latest Statistic</p>
+                    <h2 class="display-4 fw-bold text-white mb-0" id="latestStat">-</h2>
+                </div>
+
+                <div class="grid-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="p-3 rounded bg-dark border border-secondary border-opacity-25 text-center">
+                        <div class="fs-7 text-secondary text-uppercase mb-1">Big Rate</div>
+                        <div class="fs-3 fw-bold text-success" id="rateBig">-</div>
+                    </div>
+                    <div class="p-3 rounded bg-dark border border-secondary border-opacity-25 text-center">
+                        <div class="fs-7 text-secondary text-uppercase mb-1">Small Rate</div>
+                        <div class="fs-3 fw-bold text-danger" id="rateSmall">-</div>
+                    </div>
+                    <div class="p-3 rounded bg-dark border border-secondary border-opacity-25 text-center">
+                        <div class="fs-7 text-secondary text-uppercase mb-1">Even Rate</div>
+                        <div class="fs-3 fw-bold text-info" id="rateEven">-</div>
+                    </div>
+                    <div class="p-3 rounded bg-dark border border-secondary border-opacity-25 text-center">
+                        <div class="fs-7 text-secondary text-uppercase mb-1">Odd Rate</div>
+                        <div class="fs-3 fw-bold text-warning" id="rateOdd">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Card -->
+    <div class="col-md-7">
+        <div class="card h-100 winner-card" style="position: relative; overflow: hidden;">
+            <div class="card-header text-uppercase fs-7 text-secondary">
+                Winner Result
+            </div>
+
+            <div class="card-body text-center d-flex flex-column justify-content-center" id="winnerSection"
+                style="display:none;">
+                <div class="mb-4">
+                    <span class="fs-7 text-secondary text-uppercase">Winning Number</span>
+                    <div class="display-1 fw-bold text-white my-2" id="winningNumber">-</div>
+                    <span class="badge bg-primary rounded-pill px-3 py-2 fs-6" id="rewardType">-</span>
+                </div>
+
+                <div class="mb-4">
+                    <p class="fs-7 text-secondary text-uppercase mb-2">Reward Numbers</p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <span class="badge bg-dark border border-secondary p-3 fs-5" id="rewardN1">-</span>
+                        <span class="badge bg-dark border border-secondary p-3 fs-5" id="rewardN2">-</span>
+                        <span class="badge bg-dark border border-secondary p-3 fs-5" id="rewardN3">-</span>
+                    </div>
+                </div>
+
+                <div class="row mt-auto g-2">
+                    <div class="col-4">
+                        <div class="p-2 border border-secondary border-opacity-25 rounded bg-dark">
+                            <small class="text-secondary d-block fs-7">Winners</small>
+                            <strong class="text-white" id="winnerCount">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 border border-secondary border-opacity-25 rounded bg-dark">
+                            <small class="text-secondary d-block fs-7">Win Energy</small>
+                            <strong class="text-white" id="winEnergy">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 border border-secondary border-opacity-25 rounded bg-dark">
+                            <small class="text-secondary d-block fs-7">Net System</small>
+                            <strong class="text-white" id="netEnergy">-</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body d-flex align-items-center justify-content-center" id="pendingSection">
+                <div class="text-center text-muted">
+                    <div class="spinner-grow text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <h5 class="text-secondary">Waiting for result...</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header text-uppercase fs-7 text-secondary d-flex justify-content-between">
+        <span>Raw Data Payload</span>
+        <button class="btn btn-xs btn-link text-secondary text-decoration-none"
+            onclick="document.getElementById('debugJson').classList.toggle('d-none')">
+            Toggle
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <pre class="bg-dark text-secondary p-3 m-0 border-0 rounded-bottom d-none" id="debugJson"
+            style="max-height: 200px; font-size: 0.75rem;">Loading...</pre>
     </div>
 </div>
 
 <!-- Update Pre Modal -->
 <div class="modal fade" id="updatePreModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Edit Pre-Game Data</h5>
@@ -30,24 +142,24 @@
                 <form id="updatePreForm">
                     <input type="hidden" name="game_no" value="{{ game_no }}">
                     <div class="mb-3">
-                        <label class="form-label">Latest Statistic</label>
+                        <label class="form-label text-secondary">Latest Statistic</label>
                         <input type="text" class="form-control" name="latest_statistic" id="inputLatestStat">
                     </div>
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Big</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label text-secondary small">Rate Big</label>
                             <input type="number" step="0.01" class="form-control" name="rate_big" id="inputRateBig">
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Small</label>
+                        <div class="col-6">
+                            <label class="form-label text-secondary small">Rate Small</label>
                             <input type="number" step="0.01" class="form-control" name="rate_small" id="inputRateSmall">
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Even</label>
+                        <div class="col-6">
+                            <label class="form-label text-secondary small">Rate Even</label>
                             <input type="number" step="0.01" class="form-control" name="rate_even" id="inputRateEven">
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Odd</label>
+                        <div class="col-6">
+                            <label class="form-label text-secondary small">Rate Odd</label>
                             <input type="number" step="0.01" class="form-control" name="rate_odd" id="inputRateOdd">
                         </div>
                     </div>
@@ -62,7 +174,7 @@
 
 <!-- Declare Winner Modal -->
 <div class="modal fade" id="declareWinnerModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Declare Winner</h5>
@@ -71,110 +183,34 @@
             <div class="modal-body">
                 <form id="declareWinnerForm">
                     <div class="mb-3">
-                        <label class="form-label">Winning Number</label>
-                        <input type="number" class="form-control" name="winning_number" required>
+                        <label class="form-label text-secondary">Winning Number</label>
+                        <input type="number" class="form-control" name="winning_number" required
+                            style="font-size: 1.5rem; text-align: center;">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Reward Type</label>
+                        <label class="form-label text-secondary">Reward Type</label>
                         <input type="text" class="form-control" name="reward_type" placeholder="e.g. Big/Even">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Reward Numbers (comma separated)</label>
+                        <label class="form-label text-secondary">Reward Numbers</label>
                         <input type="text" class="form-control" name="reward_numbers_str" placeholder="e.g. 5,4,9">
                     </div>
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Winners Count</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label text-secondary small">Winners Count</label>
                             <input type="number" class="form-control" name="winner_count">
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Total Win Energy</label>
+                        <div class="col-6">
+                            <label class="form-label text-secondary small">Total Win Energy</label>
                             <input type="number" class="form-control" name="win_total_energy">
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-success" onclick="submitWinner()">Declare Winner</button>
+                <button type="button" class="btn btn-success w-100" onclick="submitWinner()">Declare Winner</button>
             </div>
         </div>
-    </div>
-</div>
-
-<div class="row">
-    <!-- Statistic & Rates Card -->
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header bg-warning text-dark fw-bold">Pre-Game Statistics</div>
-            <div class="card-body">
-                <h5 class="card-title">Latest Statistic: <span id="latestStat" class="text-primary">-</span></h5>
-                <hr>
-                <div class="row text-center">
-                    <div class="col-6 mb-3">
-                        <div class="display-6" id="rateBig">-</div>
-                        <small>Big Rate</small>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="display-6" id="rateSmall">-</div>
-                        <small>Small Rate</small>
-                    </div>
-                    <div class="col-6">
-                        <div class="display-6" id="rateEven">-</div>
-                        <small>Even Rate</small>
-                    </div>
-                    <div class="col-6">
-                        <div class="display-6" id="rateOdd">-</div>
-                        <small>Odd Rate</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Result Card -->
-    <div class="col-md-6 mb-4">
-        <div class="card h-100 border-primary">
-            <div class="card-header bg-primary text-white fw-bold">Winner Result</div>
-            <div class="card-body text-center" id="winnerSection" style="display:none;">
-                <div class="display-1 fw-bold text-primary mb-2" id="winningNumber">-</div>
-                <h4 class="text-muted mb-3" id="rewardType">-</h4>
-
-                <div class="d-flex justify-content-center gap-2 mb-4">
-                    <span class="badge bg-info" id="rewardN1">-</span>
-                    <span class="badge bg-info" id="rewardN2">-</span>
-                    <span class="badge bg-info" id="rewardN3">-</span>
-                </div>
-
-                <ul class="list-group list-group-flush text-start">
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Winners Count</span>
-                        <strong id="winnerCount">-</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Total Win Energy</span>
-                        <strong id="winEnergy">-</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between">
-                        <span>Net System Energy</span>
-                        <strong id="netEnergy">-</strong>
-                    </li>
-                </ul>
-            </div>
-
-            <div class="card-body d-flex align-items-center justify-content-center" id="pendingSection">
-                <div class="text-center text-muted">
-                    <div class="spinner-grow text-warning mb-2" role="status"></div>
-                    <p>Waiting for winner...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card mb-4">
-    <div class="card-header">Raw Data</div>
-    <div class="card-body">
-        <pre class="bg-light p-3 border rounded" id="debugJson" style="max-height: 200px;">Loading...</pre>
     </div>
 </div>
 
@@ -201,22 +237,22 @@
         // Status
         const badge = document.getElementById('statusBadge');
         if (data.has_winner) {
-            badge.className = 'badge bg-success fs-5';
+            badge.className = 'badge badge-status-winner rounded-pill px-3';
             badge.textContent = 'Winner Announced';
         } else if (data.has_pre) {
-            badge.className = 'badge bg-warning text-dark fs-5';
+            badge.className = 'badge badge-status-pending rounded-pill px-3';
             badge.textContent = 'Pending Result';
         } else {
-            badge.className = 'badge bg-secondary fs-5';
+            badge.className = 'badge bg-secondary rounded-pill px-3';
             badge.textContent = 'Unknown';
         }
 
         // Pre Stats
         document.getElementById('latestStat').textContent = data.latest_statistic || '-';
-        document.getElementById('rateBig').textContent = data.rate_big ? data.rate_big + '%' : '-';
-        document.getElementById('rateSmall').textContent = data.rate_small ? data.rate_small + '%' : '-';
-        document.getElementById('rateEven').textContent = data.rate_even ? data.rate_even + '%' : '-';
-        document.getElementById('rateOdd').textContent = data.rate_odd ? data.rate_odd + '%' : '-';
+        document.getElementById('rateBig').textContent = data.rate_big ? Math.round(data.rate_big) + '%' : '-';
+        document.getElementById('rateSmall').textContent = data.rate_small ? Math.round(data.rate_small) + '%' : '-';
+        document.getElementById('rateEven').textContent = data.rate_even ? Math.round(data.rate_even) + '%' : '-';
+        document.getElementById('rateOdd').textContent = data.rate_odd ? Math.round(data.rate_odd) + '%' : '-';
 
         // Populate Update Form
         document.getElementById('inputLatestStat').value = data.latest_statistic || '';

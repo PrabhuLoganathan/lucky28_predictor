@@ -1,0 +1,52 @@
+{% for game in games %}
+<tr>
+    <td class="ps-4 fw-medium text-white">{{ game.game_no }}</td>
+    <td class="text-secondary">{{ game.latest_statistic|default:"-" }}</td>
+    <td class="text-secondary small">
+        {% if game.rate_big %}
+        <div class="d-flex gap-2">
+            <span>B: {{ game.rate_big }}</span>
+            <span>S: {{ game.rate_small }}</span>
+        </div>
+        <div class="d-flex gap-2 text-muted">
+            <span>E: {{ game.rate_even }}</span>
+            <span>O: {{ game.rate_odd }}</span>
+        </div>
+        {% else %}
+        -
+        {% endif %}
+    </td>
+    <td>
+        {% if game.winning_number is not None %}
+        <div class="d-flex align-items-center gap-2">
+            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+                style="width: 32px; height: 32px; font-weight: bold;">
+                {{ game.winning_number }}
+            </div>
+            <small class="text-muted">{{ game.reward_type }}</small>
+        </div>
+        {% else %}
+        <span class="text-muted">-</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if game.has_winner %}
+        <span class="badge badge-status-winner rounded-pill px-3">Winner</span>
+        {% elif game.has_pre %}
+        <span class="badge badge-status-pending rounded-pill px-3">Pending</span>
+        {% else %}
+        <span class="badge bg-secondary rounded-pill px-3">Unknown</span>
+        {% endif %}
+    </td>
+    <td class="text-secondary small">
+        {{ game.created_at|date:"H:i:s" }}
+    </td>
+    <td class="text-end pe-4">
+        <a href="{% url 'game_detail' game.game_no %}" class="btn btn-sm btn-outline-light">Details</a>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="7" class="text-center py-5 text-muted">No games found.</td>
+</tr>
+{% endfor %}

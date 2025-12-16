@@ -4,16 +4,18 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1>Game Dashboard</h1>
     <div>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#newGameModal">+ New Game</button>
-        <span class="badge bg-secondary ms-2">Showing latest 50 games</span>
+        <h1 class="mb-0">Game Dashboard</h1>
+        <p class="text-secondary mb-0">Live monitor</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#newGameModal">New Game</button>
     </div>
 </div>
 
 <!-- New Game Modal -->
 <div class="modal fade" id="newGameModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Start New Game</h5>
@@ -22,35 +24,33 @@
             <div class="modal-body">
                 <form id="newGameForm">
                     <div class="mb-3">
-                        <label class="form-label">Game No</label>
+                        <label class="form-label text-secondary">Game No</label>
                         <input type="text" class="form-control" name="game_no" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Latest Statistic</label>
+                        <label class="form-label text-secondary">Latest Statistic</label>
                         <input type="text" class="form-control" name="latest_statistic" placeholder="e.g. 2B/1E">
                     </div>
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Big</label>
-                            <input type="number" step="0.01" class="form-control" name="rate_big">
+                    <label class="form-label text-secondary">Rates</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input type="number" step="0.01" class="form-control" name="rate_big" placeholder="Big %">
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Small</label>
-                            <input type="number" step="0.01" class="form-control" name="rate_small">
+                        <div class="col-6">
+                            <input type="number" step="0.01" class="form-control" name="rate_small"
+                                placeholder="Small %">
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Even</label>
-                            <input type="number" step="0.01" class="form-control" name="rate_even">
+                        <div class="col-6">
+                            <input type="number" step="0.01" class="form-control" name="rate_even" placeholder="Even %">
                         </div>
-                        <div class="col-6 mb-3">
-                            <label class="form-label">Rate Odd</label>
-                            <input type="number" step="0.01" class="form-control" name="rate_odd">
+                        <div class="col-6">
+                            <input type="number" step="0.01" class="form-control" name="rate_odd" placeholder="Odd %">
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="createGame()">Create Game</button>
             </div>
         </div>
@@ -60,63 +60,77 @@
 <div class="row">
     <div class="col-12">
         <div class="card">
-            <div class="card-body">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Recent Games</span>
+                <span class="badge bg-dark border border-secondary text-secondary">Latest 50</span>
+            </div>
+            <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead>
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="text-secondary text-uppercase fs-7"
+                            style="font-size: 0.75rem; letter-spacing: 0.5px;">
                             <tr>
-                                <th>Game No</th>
+                                <th class="ps-4">Game No</th>
                                 <th>Latest Stat</th>
-                                <th>Pre Rates (B/S/E/O)</th>
+                                <th>Rates (B/S/E/O)</th>
                                 <th>Result</th>
                                 <th>Status</th>
-                                <th>Timestamp</th>
-                                <th>Actions</th>
+                                <th>Time</th>
+                                <th class="text-end pe-4">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="gamesTableBody">
                             {% for game in games %}
                             <tr>
-                                <td class="fw-bold">{{ game.game_no }}</td>
-                                <td>{{ game.latest_statistic|default:"-" }}</td>
-                                <td>
+                                <td class="ps-4 fw-medium text-white">{{ game.game_no }}</td>
+                                <td class="text-secondary">{{ game.latest_statistic|default:"-" }}</td>
+                                <td class="text-secondary small">
                                     {% if game.rate_big %}
-                                    <small>
-                                        B:{{ game.rate_big }}% S:{{ game.rate_small }}%<br>
-                                        E:{{ game.rate_even }}% O:{{ game.rate_odd }}%
-                                    </small>
+                                    <div class="d-flex gap-2">
+                                        <span>B: {{ game.rate_big }}</span>
+                                        <span>S: {{ game.rate_small }}</span>
+                                    </div>
+                                    <div class="d-flex gap-2 text-muted">
+                                        <span>E: {{ game.rate_even }}</span>
+                                        <span>O: {{ game.rate_odd }}</span>
+                                    </div>
                                     {% else %}
                                     -
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if game.winning_number is not None %}
-                                    <span class="badge bg-primary fs-6">{{ game.winning_number }}</span>
-                                    <br><small class="text-muted">{{ game.reward_type }}</small>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+                                            style="width: 32px; height: 32px; font-weight: bold;">
+                                            {{ game.winning_number }}
+                                        </div>
+                                        <small class="text-muted">{{ game.reward_type }}</small>
+                                    </div>
                                     {% else %}
-                                    -
+                                    <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     {% if game.has_winner %}
-                                    <span class="badge badge-status-winner">Winner</span>
+                                    <span class="badge badge-status-winner rounded-pill px-3">Winner</span>
                                     {% elif game.has_pre %}
-                                    <span class="badge badge-status-pending">Pending</span>
+                                    <span class="badge badge-status-pending rounded-pill px-3">Pending</span>
                                     {% else %}
-                                    <span class="badge bg-secondary">Unknown</span>
+                                    <span class="badge bg-secondary rounded-pill px-3">Unknown</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-muted small">
-                                    {{ game.created_at|date:"M d, H:i:s" }}
+                                <td class="text-secondary small">
+                                    {{ game.created_at|date:"H:i:s" }}
                                 </td>
-                                <td>
+                                <td class="text-end pe-4">
                                     <a href="{% url 'game_detail' game.game_no %}"
-                                        class="btn btn-sm btn-outline-primary">View</a>
+                                        class="btn btn-sm btn-outline-light">Details</a>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="7" class="text-center py-4">No games found.</td>
+                                <td colspan="7" class="text-center py-5 text-muted">No games found.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -135,7 +149,6 @@
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
 
-        // Basic validation
         if (!data.game_no) {
             alert('Game No is required');
             return;
@@ -152,14 +165,30 @@
             });
 
             if (response.ok) {
-                window.location.reload();
+                // Refresh immediately instead of reload
+                refreshTable();
+                const modal = bootstrap.Modal.getInstance(document.getElementById('newGameModal'));
+                modal.hide();
+                form.reset();
             } else {
                 const err = await response.json();
-                alert('Error creating game: ' + JSON.stringify(err));
+                alert('Error: ' + JSON.stringify(err));
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Failed to create game');
+            alert('Failed to connect to API');
+        }
+    }
+
+    async function refreshTable() {
+        try {
+            const response = await fetch('/games/dashboard/rows/');
+            if (response.ok) {
+                const html = await response.text();
+                document.getElementById('gamesTableBody').innerHTML = html;
+            }
+        } catch (e) {
+            console.error('Auto-refresh failed', e);
         }
     }
 
@@ -177,5 +206,8 @@
         }
         return cookieValue;
     }
+
+    // Auto-refresh every 3 seconds
+    setInterval(refreshTable, 3000);
 </script>
 {% endblock %}

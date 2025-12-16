@@ -10,6 +10,10 @@ def game_dashboard(request):
     games = GameRound.objects.all().order_by("-created_at")[:50]
     return render(request, "games/dashboard.html", {"games": games})
 
+def game_dashboard_rows(request):
+    games = GameRound.objects.all().order_by("-created_at")[:50]
+    return render(request, "games/dashboard_rows.html", {"games": games})
+
 def game_detail(request, game_no):
     return render(request, "games/detail.html", {"game_no": game_no})
 
@@ -59,4 +63,4 @@ class GameRoundRetrieve(RetrieveAPIView):
 
 class GameRoundList(ListAPIView):
     serializer_class = GameRoundSerializer
-    queryset = GameRound.objects.all().order_by("-game_no")
+    queryset = GameRound.objects.all().order_by("-created_at")
