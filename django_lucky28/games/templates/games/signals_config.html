@@ -30,6 +30,7 @@
                         <th class="text-end pe-4">Actions</th>
                     </tr>
                 </thead>
+
                 <tbody>
                     {% for rule in rules %}
                     <tr>
@@ -42,9 +43,7 @@
                         </td>
 
                         <td>{{ rule.get_dimension_display }}</td>
-
                         <td>{{ rule.target_value }}</td>
-
                         <td class="fw-bold">{{ rule.threshold }}</td>
 
                         <td>
@@ -89,6 +88,7 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+
             </table>
         </div>
     </div>
@@ -98,6 +98,7 @@
 <div class="modal fade" id="newRuleModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
+
             <div class="modal-header">
                 <h5 class="modal-title">Define New Rule</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -105,6 +106,7 @@
 
             <div class="modal-body">
                 <form id="newRuleForm">
+
                     <div class="mb-3">
                         <label class="form-label text-secondary">Rule Name</label>
                         <input
@@ -112,8 +114,7 @@
                             class="form-control"
                             name="name"
                             required
-                            placeholder="e.g. 10 Big Streak"
-                        >
+                            placeholder="e.g. 10 Big Streak">
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -144,8 +145,7 @@
                                 class="form-control"
                                 name="target_value"
                                 required
-                                placeholder="Big, Red, Odd..."
-                            >
+                                placeholder="Big, Red, Odd...">
                         </div>
 
                         <div class="col-6">
@@ -155,8 +155,7 @@
                                 class="form-control"
                                 name="threshold"
                                 required
-                                value="6"
-                            >
+                                value="6">
                         </div>
                     </div>
 
@@ -168,6 +167,7 @@
                             {% endfor %}
                         </select>
                     </div>
+
                 </form>
             </div>
 
@@ -185,6 +185,7 @@
                     Save Rule
                 </button>
             </div>
+
         </div>
     </div>
 </div>
@@ -211,7 +212,7 @@ async function submitRule() {
     const form = document.getElementById('newRuleForm');
     const data = Object.fromEntries(new FormData(form).entries());
 
-    const res = await fetch('/games/signals/api/config/add/', {
+    const res = await fetch('/signals/api/config/add/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -227,7 +228,7 @@ async function submitRule() {
 async function deleteRule(id) {
     if (!confirm('Delete this rule?')) return;
 
-    const res = await fetch('/games/signals/api/config/delete/', {
+    const res = await fetch('/signals/api/config/delete/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -240,7 +241,7 @@ async function deleteRule(id) {
 }
 
 async function toggleRule(id) {
-    await fetch('/games/signals/api/config/toggle/', {
+    await fetch('/signals/api/config/toggle/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

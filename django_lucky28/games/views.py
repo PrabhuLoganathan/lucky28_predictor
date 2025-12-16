@@ -153,6 +153,7 @@ def signals_config_action(request, action):
     from .models import SignalRule
     
     if action == "add":
+        print(f"DEBUG: Adding Rule Payload: {request.data}")
         try:
             SignalRule.objects.create(
                 name=request.data.get("name"),
@@ -164,6 +165,7 @@ def signals_config_action(request, action):
             )
             return Response({"success": True})
         except Exception as e:
+            print(f"ERROR Adding Rule: {e}")
             return Response({"error": str(e)}, status=400)
 
     elif action == "delete":
