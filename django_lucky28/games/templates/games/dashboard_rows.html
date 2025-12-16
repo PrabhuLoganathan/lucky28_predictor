@@ -30,6 +30,25 @@
         {% endif %}
     </td>
     <td>
+        {% if game.winner_color == 'Red' %}
+        <span class="badge bg-danger">Red</span>
+        {% elif game.winner_color == 'Yellow' %}
+        <span class="badge bg-warning text-dark">Yellow</span>
+        {% elif game.winner_color == 'Pink' %}
+        <span class="badge" style="background-color: #ff69b4;">Pink</span>
+        {% elif game.winner_color == 'Blue' %}
+        <span class="badge bg-primary">Blue</span>
+        {% elif game.winner_color == 'Cyan' %}
+        <span class="badge bg-info text-dark">Cyan</span>
+        {% elif game.winner_color == 'Green' %}
+        <span class="badge bg-success">Green</span>
+        {% elif game.winner_color == 'Grey' %}
+        <span class="badge bg-secondary">Grey</span>
+        {% else %}
+        <span class="text-muted small">-</span>
+        {% endif %}
+    </td>
+    <td>
         {% if game.has_winner %}
         <span class="badge badge-status-winner rounded-pill px-3">Winner</span>
         {% elif game.has_pre %}

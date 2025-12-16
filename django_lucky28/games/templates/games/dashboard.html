@@ -74,6 +74,7 @@
                                 <th>Latest Stat</th>
                                 <th>Rates (B/S/E/O)</th>
                                 <th>Result</th>
+                                <th>Color</th>
                                 <th>Status</th>
                                 <th>Time</th>
                                 <th class="text-end pe-4">Actions</th>
@@ -109,6 +110,25 @@
                                     </div>
                                     {% else %}
                                     <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if game.winner_color == 'Red' %}
+                                    <span class="badge bg-danger">Red</span>
+                                    {% elif game.winner_color == 'Yellow' %}
+                                    <span class="badge bg-warning text-dark">Yellow</span>
+                                    {% elif game.winner_color == 'Pink' %}
+                                    <span class="badge" style="background-color: #ff69b4;">Pink</span>
+                                    {% elif game.winner_color == 'Blue' %}
+                                    <span class="badge bg-primary">Blue</span>
+                                    {% elif game.winner_color == 'Cyan' %}
+                                    <span class="badge bg-info text-dark">Cyan</span>
+                                    {% elif game.winner_color == 'Green' %}
+                                    <span class="badge bg-success">Green</span>
+                                    {% elif game.winner_color == 'Grey' %}
+                                    <span class="badge bg-secondary">Grey</span>
+                                    {% else %}
+                                    <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
                                 <td>

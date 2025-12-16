@@ -17,6 +17,7 @@ class GameRound(models.Model):
     winning_number = models.IntegerField(blank=True, null=True)
     reward_numbers = models.JSONField(blank=True, null=True)  # [5,4,9]
     reward_type = models.CharField(max_length=32, blank=True, null=True)
+    winner_color = models.CharField(max_length=32, blank=True, null=True)
     winner_count = models.IntegerField(blank=True, null=True)
     bet_users = models.IntegerField(blank=True, null=True)
     bet_total_energy = models.BigIntegerField(blank=True, null=True)

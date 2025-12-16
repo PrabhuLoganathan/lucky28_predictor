@@ -35,6 +35,20 @@ def upsert_pre(request):
 
     return Response(GameRoundSerializer(obj).data, status=201 if created else 200)
 
+def get_winning_color(number):
+    if number is None:
+        return None
+    
+    n = int(number)
+    if n in [0, 1, 26, 27]: return "Red"
+    if n in [2, 3, 24, 25]: return "Yellow"
+    if n in [4, 5, 22, 23]: return "Pink"
+    if n in [6, 7, 20, 21]: return "Blue"
+    if n in [8, 9, 18, 19]: return "Cyan"
+    if n in [10, 11, 16, 17]: return "Green"
+    if n in [12, 13, 14, 15]: return "Grey"
+    return "Unknown"
+
 @api_view(["PATCH"])
 def update_winner(request, game_no):
     try:
@@ -50,6 +64,10 @@ def update_winner(request, game_no):
     ]:
         if f in request.data:
             setattr(obj, f, request.data[f])
+
+    # Determine Color
+    if obj.winning_number is not None:
+        obj.winner_color = get_winning_color(obj.winning_number)
 
     obj.has_winner = True
     obj.save()
