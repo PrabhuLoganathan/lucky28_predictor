@@ -102,7 +102,7 @@ class SignalAnalyzer:
         # Let's log it. Use Triggered At to debounce if needed? 
         # For now, simplistic approach: If >= threshold, it's a signal.
         
-        if current_value >= rule.threshold:
+        if current_value == rule.threshold:
             # Check if we already logged this specific signal for this specific game
             exists = SignalLog.objects.filter(game=game_round, rule=rule).exists()
             if not exists:
@@ -113,13 +113,19 @@ class SignalAnalyzer:
                     value=current_value
                 )
                 
+                # Count signals today
+                from django.utils import timezone
+                today = timezone.now().date()
+                daily_count = SignalLog.objects.filter(triggered_at__date=today).count()
+                
                 # Compose Message
                 msg_type = "🚨" if rule.severity == 'CRITICAL' else "⚠️"
                 msg = (
                     f"{msg_type} *SIGNAL DETECTED* {msg_type}\n"
                     f"Rule: {rule.name}\n"
                     f"Current {rule.rule_type.title()}: *{current_value}*\n"
-                    f"Game: {game_round.game_no}"
+                    f"Game: {game_round.game_no}\n"
+                    f"Signals Today: {daily_count}"
                 )
                 
                 # Send Alert

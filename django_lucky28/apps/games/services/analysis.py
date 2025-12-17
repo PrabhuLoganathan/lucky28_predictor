@@ -4,6 +4,18 @@ from typing import List, Dict, Tuple, Any
 
 class AnalysisService:
     @staticmethod
+    def get_color(n: int) -> str:
+        """Return color for number 0-27."""
+        if n in [0, 1, 26, 27]: return "Red"
+        if n in [2, 3, 24, 25]: return "Yellow"
+        if n in [4, 5, 22, 23]: return "Pink"
+        if n in [6, 7, 20, 21]: return "Blue"
+        if n in [8, 9, 18, 19]: return "Cyan"
+        if n in [10, 11, 16, 17]: return "Green"
+        if n in [12, 13, 14, 15]: return "Grey"
+        return "Unknown"
+
+    @staticmethod
     def classify(n: int) -> Dict[str, Any]:
         """Classify a single number into its groups."""
         is_small = 0 <= n <= 13
@@ -17,6 +29,8 @@ class AnalysisService:
         elif is_big and is_odd: combo = 'BO'
         elif is_big and is_even: combo = 'BE'
 
+        color = AnalysisService.get_color(n)
+
         return {
             'number': n,
             'is_small': is_small,
@@ -24,6 +38,7 @@ class AnalysisService:
             'is_even': is_even,
             'is_odd': is_odd,
             'combo': combo,
+            'color': color,
             'size': 'Small' if is_small else 'Big',
             'parity': 'Even' if is_even else 'Odd'
         }
@@ -254,9 +269,28 @@ class AnalysisService:
             'even': find_gap(lambda x: x % 2 == 0),
         }
         
+        # Color Gaps
+        # Map color -> numbers
+        # Red: 0,1,26,27 | Yellow: 2,3,24,25 | Pink: 4,5,22,23 | Blue: 6,7,20,21 
+        # Cyan: 8,9,18,19 | Green: 10,11,16,17 | Grey: 12,13,14,15
+        color_map = {
+            'Red': [0, 1, 26, 27],
+            'Yellow': [2, 3, 24, 25],
+            'Pink': [4, 5, 22, 23],
+            'Blue': [6, 7, 20, 21],
+            'Cyan': [8, 9, 18, 19],
+            'Green': [10, 11, 16, 17],
+            'Grey': [12, 13, 14, 15]
+        }
+        
+        color_gaps = {}
+        for c_name, nums in color_map.items():
+            color_gaps[c_name] = find_gap(lambda x: x in nums)
+        
         return {
             'numbers': number_gaps,
-            'categories': cat_gaps
+            'categories': cat_gaps,
+            'colors': color_gaps
         }
 
     @staticmethod

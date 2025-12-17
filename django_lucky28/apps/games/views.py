@@ -326,3 +326,79 @@ def api_analysis_simulate(request):
         return Response(results)
     except Exception as e:
         return Response({"error": str(e)}, status=400)
+
+
+# --- Import ---
+from django.contrib import messages
+from django.shortcuts import redirect
+import csv
+from io import TextIOWrapper
+from datetime import datetime
+from django.utils import timezone
+
+def import_games(request):
+    if request.method == "POST":
+        csv_file = request.FILES.get('csv_file')
+        if not csv_file:
+            messages.error(request, "No file uploaded.")
+            return redirect('import_games')
+        
+        if not csv_file.name.endswith('.csv'):
+            messages.error(request, "Please upload a CSV file.")
+            return redirect('import_games')
+
+        try:
+            # Read CSV
+            file_data = TextIOWrapper(csv_file.file, encoding='utf-8')
+            reader = csv.DictReader(file_data)
+            
+            count = 0
+            for row in reader:
+                # Expected columns: issue, winning_number, time (optional)
+                # Map various common names
+                game_no = row.get('issue') or row.get('game_no') or row.get('Game No')
+                winning_amt = row.get('result') or row.get('winning_number') or row.get('Number')
+                
+                if not game_no or not winning_amt:
+                    continue
+                    
+                winning_number = int(winning_amt)
+                
+                # Create or Update
+                game, created = GameRound.objects.get_or_create(
+                    game_no=game_no,
+                    defaults={
+                        'winning_number': winning_number,
+                        'has_winner': True,
+                        'winner_event_ts': timezone.now() # Default if no time
+                    }
+                )
+                
+                # If existing but incomplete
+                if not created and not game.has_winner:
+                    game.winning_number = winning_number
+                    game.has_winner = True
+                    game.save()
+                    
+                # Calculate winner color
+                if not game.winner_color:
+                    game.winner_color = get_winning_color(winning_number)
+                    game.save()
+                
+                # Also Trigger Signal Scanning for this imported game?
+                # User said: "Once the signal is detected it should reset..."
+                # If we import historical data, we might trigger OLD signals.
+                # But that's probably okay for "Backfill".
+                from .services.signals import SignalAnalyzer
+                analyzer = SignalAnalyzer()
+                analyzer.analyze_game(game)
+
+                count += 1
+                
+            messages.success(request, f"Successfully imported {count} games.")
+        except Exception as e:
+            messages.error(request, f"Error processing file: {str(e)}")
+            
+        return redirect('import_games')
+        
+    return render(request, "games/import_games.html")

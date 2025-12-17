@@ -21,4 +21,7 @@ urlpatterns = [
     # Pro Analysis
     path("analysis/", views.pro_dashboard, name="pro_dashboard"),
     path("analysis/api/simulate/", views.api_analysis_simulate, name="api_analysis_simulate"),
+    
+    # Import
+    path("games/import/", views.import_games, name="import_games"),
 ]

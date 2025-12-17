@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load humanize %}
+{% load static %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -12,19 +13,17 @@
 
         <!-- Filter Form -->
         <form method="get" class="d-flex gap-2">
-            <input type="date" name="start_date" class="form-control" value="{{ filters.start_date|default:'' }}"
-                placeholder="Start Date">
-            <input type="date" name="end_date" class="form-control" value="{{ filters.end_date|default:'' }}"
-                placeholder="End Date">
+            <input type="date" name="start_date" class="form-control" value="{{ filters.start_date|default:'' }}" placeholder="Start Date">
+            <input type="date" name="end_date" class="form-control" value="{{ filters.end_date|default:'' }}" placeholder="End Date">
             <button type="submit" class="btn btn-primary">Filter</button>
             {% if filters.start_date or filters.end_date %}
-            <a href="{% url 'pro_dashboard' %}" class="btn btn-outline-secondary">Clear</a>
+                <a href="{% url 'pro_dashboard' %}" class="btn btn-outline-secondary">Clear</a>
             {% endif %}
         </form>
     </div>
 
     {% if no_data %}
-    <div class="alert alert-warning">No game data found for the selected period.</div>
+        <div class="alert alert-warning">No game data found for the selected period.</div>
     {% else %}
 
     <!-- INSIGHTS & PREDICTIONS -->
@@ -33,7 +32,7 @@
         <h5 class="alert-heading"><i class="fas fa-lightbulb"></i> Key Insights (Automated)</h5>
         <ul class="mb-0 ps-3">
             {% for txt in insights %}
-            <li>{{ txt|safe }}</li>
+                <li>{{ txt|safe }}</li>
             {% endfor %}
         </ul>
     </div>
@@ -54,6 +53,7 @@
                 </div>
             </div>
         </div>
+
         <!-- Pie Charts -->
         <div class="col-lg-4 mb-4">
             <div class="card shadow h-100">
@@ -79,8 +79,7 @@
     <!-- Tabs -->
     <ul class="nav nav-tabs mb-4" id="analysisTab" role="tablist">
         <li class="nav-item">
-            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab"
-                data-bs-target="#overview">Overview</button>
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview">Overview</button>
         </li>
         <li class="nav-item">
             <button class="nav-link" id="gaps-tab" data-bs-toggle="tab" data-bs-target="#gaps">⏳ Gap Analysis</button>
@@ -89,12 +88,10 @@
             <button class="nav-link" id="streaks-tab" data-bs-toggle="tab" data-bs-target="#streaks">Streaks</button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="repetition-tab" data-bs-toggle="tab"
-                data-bs-target="#repetition">Repetition</button>
+            <button class="nav-link" id="repetition-tab" data-bs-toggle="tab" data-bs-target="#repetition">Repetition</button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="simulator-tab" data-bs-toggle="tab"
-                data-bs-target="#simulator">Simulator</button>
+            <button class="nav-link" id="simulator-tab" data-bs-toggle="tab" data-bs-target="#simulator">Simulator</button>
         </li>
     </ul>
 
@@ -111,30 +108,16 @@
                         </div>
                         <div class="card-body p-0">
                             <table class="table table-striped mb-0">
-                                <tr>
-                                    <th>Total Games</th>
-                                    <td>{{ stats.total }}</td>
-                                </tr>
-                                <tr>
-                                    <th>Small (0-13)</th>
-                                    <td>{{ stats.small }} ({{ stats.small_pct|floatformat:1 }}%)</td>
-                                </tr>
-                                <tr>
-                                    <th>Big (14-27)</th>
-                                    <td>{{ stats.big }} ({{ stats.big_pct|floatformat:1 }}%)</td>
-                                </tr>
-                                <tr>
-                                    <th>Odd</th>
-                                    <td>{{ stats.odd }} ({{ stats.odd_pct|floatformat:1 }}%)</td>
-                                </tr>
-                                <tr>
-                                    <th>Even</th>
-                                    <td>{{ stats.even }} ({{ stats.even_pct|floatformat:1 }}%)</td>
-                                </tr>
+                                <tr><th>Total Games</th><td>{{ stats.total }}</td></tr>
+                                <tr><th>Small (0-13)</th><td>{{ stats.small }} ({{ stats.small_pct|floatformat:1 }}%)</td></tr>
+                                <tr><th>Big (14-27)</th><td>{{ stats.big }} ({{ stats.big_pct|floatformat:1 }}%)</td></tr>
+                                <tr><th>Odd</th><td>{{ stats.odd }} ({{ stats.odd_pct|floatformat:1 }}%)</td></tr>
+                                <tr><th>Even</th><td>{{ stats.even }} ({{ stats.even_pct|floatformat:1 }}%)</td></tr>
                             </table>
                         </div>
                     </div>
                 </div>
+
                 <!-- Hot/Cold -->
                 <div class="col-md-8">
                     <div class="row">
@@ -155,6 +138,7 @@
                                 </div>
                             </div>
                         </div>
+
                         <div class="col-md-6">
                             <div class="card shadow mb-4 border-bottom-info">
                                 <div class="card-header py-3">
@@ -180,43 +164,102 @@
         <!-- GAP ANALYSIS TAB -->
         <div class="tab-pane fade" id="gaps">
             <div class="row">
-                <div class="col-md-4">
+
+                <!-- Color Gaps -->
+                <div class="col-md-3">
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Category Gaps (Games since last hit)</h6>
+                            <h6 class="m-0 font-weight-bold text-primary">🌈 Color Gaps</h6>
                         </div>
-                        <div class="card-body">
-                            <ul class="list-group">
+                        <div class="card-body p-0">
+                            <ul class="list-group list-group-flush">
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Small
-                                    <span
-                                        class="badge {% if gap_data.categories.small > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
-                                        gap_data.categories.small }}</span>
+                                    <span class="text-danger fw-bold">Red</span>
+                                    <span class="badge {% if gap_data.colors.Red|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.colors.Red|default:0 }}
+                                    </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Big
-                                    <span
-                                        class="badge {% if gap_data.categories.big > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
-                                        gap_data.categories.big }}</span>
+                                    <span class="text-warning fw-bold">Yellow</span>
+                                    <span class="badge {% if gap_data.colors.Yellow|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.colors.Yellow|default:0 }}
+                                    </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Odd
-                                    <span
-                                        class="badge {% if gap_data.categories.odd > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
-                                        gap_data.categories.odd }}</span>
+                                    <span style="color: #ff69b4;" class="fw-bold">Pink</span>
+                                    <span class="badge {% if gap_data.colors.Pink|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.colors.Pink|default:0 }}
+                                    </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Even
-                                    <span
-                                        class="badge {% if gap_data.categories.even > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
-                                        gap_data.categories.even }}</span>
+                                    <span class="text-primary fw-bold">Blue</span>
+                                    <span class="badge {% if gap_data.colors.Blue|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.colors.Blue|default:0 }}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-info fw-bold">Cyan</span>
+                                    <span class="badge {% if gap_data.colors.Cyan|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.colors.Cyan|default:0 }}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-success fw-bold">Green</span>
+                                    <span class="badge {% if gap_data.colors.Green|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.colors.Green|default:0 }}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-secondary fw-bold">Grey</span>
+                                    <span class="badge {% if gap_data.colors.Grey|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.colors.Grey|default:0 }}
+                                    </span>
                                 </li>
                             </ul>
-                            <small class="text-muted mt-2 d-block">Values > 6 are highlighted red.</small>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-8">
+
+                <!-- Category Gaps -->
+                <div class="col-md-3">
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Category Gaps</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>Small</span>
+                                    <span class="badge {% if gap_data.categories.small|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.categories.small|default:0 }}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>Big</span>
+                                    <span class="badge {% if gap_data.categories.big|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.categories.big|default:0 }}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>Odd</span>
+                                    <span class="badge {% if gap_data.categories.odd|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.categories.odd|default:0 }}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>Even</span>
+                                    <span class="badge {% if gap_data.categories.even|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                        {{ gap_data.categories.even|default:0 }}
+                                    </span>
+                                </li>
+                            </ul>
+                            <div class="p-2 text-center small text-muted">Values > 6 are red</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Number Gaps Heatmap -->
+                <div class="col-md-6">
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
                             <h6 class="m-0 font-weight-bold text-primary">Number Gaps Heatmap (0-27)</h6>
@@ -224,22 +267,64 @@
                         <div class="card-body">
                             <div class="row g-2">
                                 {% for n, gap in gap_data.numbers.items %}
-                                <div class="col-3 col-md-2 col-lg-1">
-                                    <div class="p-2 border rounded text-center"
-                                        style="background-color: rgba(220, 53, 69, {{ gap|divisibleby:50|yesno:'0.8,0' }}{% if gap < 10 %}0.1{% elif gap < 30 %}0.3{% else %}0.6{% endif %});">
-                                        <div class="fw-bold">{{ n }}</div>
-                                        <small class="text-xs">Gap: {{ gap }}</small>
-                                    </div>
+                                <div class="col-3 col-md-2">
+                                    {% comment %}
+                                        FIX: build a valid rgba alpha (single value).
+                                    {% endcomment %}
+                                    {% if gap < 5 %}
+                                        {% with alpha="0.05" %}
+                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                            <div class="fw-bold">{{ n }}</div>
+                                            <small class="text-xs">Gap: {{ gap }}</small>
+                                        </div>
+                                        {% endwith %}
+                                    {% elif gap < 10 %}
+                                        {% with alpha="0.10" %}
+                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                            <div class="fw-bold">{{ n }}</div>
+                                            <small class="text-xs">Gap: {{ gap }}</small>
+                                        </div>
+                                        {% endwith %}
+                                    {% elif gap < 20 %}
+                                        {% with alpha="0.20" %}
+                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                            <div class="fw-bold">{{ n }}</div>
+                                            <small class="text-xs">Gap: {{ gap }}</small>
+                                        </div>
+                                        {% endwith %}
+                                    {% elif gap < 30 %}
+                                        {% with alpha="0.35" %}
+                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                            <div class="fw-bold">{{ n }}</div>
+                                            <small class="text-xs">Gap: {{ gap }}</small>
+                                        </div>
+                                        {% endwith %}
+                                    {% elif gap < 50 %}
+                                        {% with alpha="0.55" %}
+                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                            <div class="fw-bold">{{ n }}</div>
+                                            <small class="text-xs">Gap: {{ gap }}</small>
+                                        </div>
+                                        {% endwith %}
+                                    {% else %}
+                                        {% with alpha="0.75" %}
+                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                            <div class="fw-bold">{{ n }}</div>
+                                            <small class="text-xs">Gap: {{ gap }}</small>
+                                        </div>
+                                        {% endwith %}
+                                    {% endif %}
                                 </div>
                                 {% endfor %}
                             </div>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
 
-        <!-- STREAKS TAB (Same as before but cleaned up) -->
+        <!-- STREAKS TAB -->
         <div class="tab-pane fade" id="streaks">
             <div class="row">
                 <div class="col-md-6">
@@ -261,6 +346,7 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="col-md-6">
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
@@ -269,10 +355,7 @@
                         <div class="card-body">
                             <table class="table table-sm table-hover">
                                 <thead>
-                                    <tr>
-                                        <th>Outcome</th>
-                                        <th>Prob %</th>
-                                    </tr>
+                                    <tr><th>Outcome</th><th>Prob %</th></tr>
                                 </thead>
                                 <tbody>
                                     {% for k, v in probs.items %}
@@ -282,8 +365,7 @@
                                             <div class="d-flex align-items-center">
                                                 <span class="me-2">{{ v|floatformat:3 }}</span>
                                                 <div class="progress flex-grow-1" style="height: 5px;">
-                                                    <div class="progress-bar" style="width: {% widthratio v 1 100 %}%;">
-                                                    </div>
+                                                    <div class="progress-bar" style="width: {% widthratio v 1 100 %}%;"></div>
                                                 </div>
                                             </div>
                                         </td>
@@ -297,7 +379,7 @@
             </div>
         </div>
 
-        <!-- REPETITION (Same) -->
+        <!-- REPETITION -->
         <div class="tab-pane fade" id="repetition">
             <div class="card shadow mb-4">
                 <div class="card-body">
@@ -327,19 +409,18 @@
             </div>
         </div>
 
-        <!-- SIMULATOR (Same) -->
+        <!-- SIMULATOR -->
         <div class="tab-pane fade" id="simulator">
             <div class="card shadow mb-4">
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-4">
-                            <form id="simForm" class="p-3 border rounded">
+                            <form id="simForm" class="p-3 border rounded" onsubmit="return false;">
                                 <h6 class="mb-3">Config</h6>
                                 <div class="mb-3">
                                     <label>Probability</label>
                                     <select class="form-select" id="simProb">
-                                        <option value="{{ probs.small }}">Small ({{ probs.small|floatformat:3 }})
-                                        </option>
+                                        <option value="{{ probs.small }}">Small ({{ probs.small|floatformat:3 }})</option>
                                         <option value="{{ probs.big }}">Big ({{ probs.big|floatformat:3 }})</option>
                                         <option value="{{ probs.odd }}">Odd ({{ probs.odd|floatformat:3 }})</option>
                                         <option value="{{ probs.even }}">Even ({{ probs.even|floatformat:3 }})</option>
@@ -353,14 +434,12 @@
                                     <label>Simulations</label>
                                     <input type="number" class="form-control" id="simCount" value="5000">
                                 </div>
-                                <button type="button" onclick="runSimulation()"
-                                    class="btn btn-primary w-100">Run</button>
+                                <button type="button" onclick="runSimulation()" class="btn btn-primary w-100">Run</button>
                             </form>
                         </div>
                         <div class="col-md-8">
                             <div id="simResults" class="p-3 bg-light border rounded h-100 position-relative">
-                                <div class="position-absolute top-50 start-50 translate-middle text-muted">Results will
-                                    appear here</div>
+                                <div class="position-absolute top-50 start-50 translate-middle text-muted">Results will appear here</div>
                             </div>
                         </div>
                     </div>
@@ -376,93 +455,112 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-// --- Charts ---
-{% if charts_json %}
-const chartData = JSON.parse('{{ charts_json|escapejs }}');
-
-// 1. Freq Chart
-new Chart(document.getElementById('freqChart'), {
-    type: 'bar',
-    data: {
-        labels: chartData.freq.labels,
-        datasets: [{
-            label: 'Frequency',
-            data: chartData.freq.data,
-            backgroundColor: '#4e73df',
-        }]
-    },
-    options: { maintainAspectRatio: false }
-});
-
-// 2. Big/Small
-new Chart(document.getElementById('bsChart'), {
-    type: 'doughnut',
-    data: {
-        labels: ['Big', 'Small'],
-        datasets: [{
-            data: [chartData.dist.big, chartData.dist.small],
-            backgroundColor: ['#e74a3b', '#1cc88a']
-        }]
-    }
-});
-
-// 3. Odd/Even
-new Chart(document.getElementById('oeChart'), {
-    type: 'doughnut',
-    data: {
-        labels: ['Odd', 'Even'],
-        datasets: [{
-            data: [chartData.dist.odd, chartData.dist.even],
-            backgroundColor: ['#f6c23e', '#36b9cc']
-        }]
-    }
-});
-{% endif %}
-
-// --- Simulator ---
-async function runSimulation() {
-    const prob = document.getElementById('simProb').value;
-    const current = document.getElementById('simCurrent').value;
-    const sims = document.getElementById('simCount').value;
-    
-    document.getElementById('simResults').innerHTML = '<p class="text-center pt-5">Running...</p>';
-    
-    try {
-        const response = await fetch('/analysis/api/simulate/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                prob: prob,
-                current_len: current,
-                sims: sims,
-                max_extra: 20
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            document.getElementById('simResults').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-            return;
+    // CSRF helper (Django standard)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
         }
-        
-        let html = '<table class="table table-sm table-bordered bg-white"><thead><tr><th>Final Length</th><th>Count</th><th>Chance (%)</th></tr></thead><tbody>';
-        data.forEach(row => {
-            html += `<tr>
-                <td>${row.length}</td>
-                <td>${row.count}</td>
-                <td style="width: 50%"><div class="progress"><div class="progress-bar" style="width:${row.percent}%">${row.percent.toFixed(1)}%</div></div></td>
-            </tr>`;
-        });
-        html += '</tbody></table>';
-        document.getElementById('simResults').innerHTML = html;
-        
-    } catch (e) {
-        document.getElementById('simResults').innerHTML = `<div class="alert alert-danger">Error: ${e}</div>`;
+        return cookieValue;
     }
-}
+    const csrftoken = getCookie('csrftoken');
+
+    // --- Charts ---
+    {% if charts_json %}
+    const chartData = JSON.parse('{{ charts_json|escapejs }}');
+
+    // 1. Freq Chart
+    new Chart(document.getElementById('freqChart'), {
+        type: 'bar',
+        data: {
+            labels: chartData.freq.labels,
+            datasets: [{
+                label: 'Frequency',
+                data: chartData.freq.data
+            }]
+        },
+        options: { maintainAspectRatio: false }
+    });
+
+    // 2. Big/Small
+    new Chart(document.getElementById('bsChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Big', 'Small'],
+            datasets: [{
+                data: [chartData.dist.big, chartData.dist.small]
+            }]
+        }
+    });
+
+    // 3. Odd/Even
+    new Chart(document.getElementById('oeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Odd', 'Even'],
+            datasets: [{
+                data: [chartData.dist.odd, chartData.dist.even]
+            }]
+        }
+    });
+    {% endif %}
+
+    // --- Simulator ---
+    async function runSimulation() {
+        const prob = document.getElementById('simProb').value;
+        const current = document.getElementById('simCurrent').value;
+        const sims = document.getElementById('simCount').value;
+
+        document.getElementById('simResults').innerHTML = '<p class="text-center pt-5">Running...</p>';
+
+        try {
+            const response = await fetch('/analysis/api/simulate/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    prob: prob,
+                    current_len: current,
+                    sims: sims,
+                    max_extra: 20
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                document.getElementById('simResults').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+
+            let html = '<table class="table table-sm table-bordered bg-white"><thead><tr><th>Final Length</th><th>Count</th><th>Chance (%)</th></tr></thead><tbody>';
+            data.forEach(row => {
+                html += `<tr>
+                    <td>${row.length}</td>
+                    <td>${row.count}</td>
+                    <td style="width: 50%">
+                        <div class="progress">
+                            <div class="progress-bar" style="width:${row.percent}%">${row.percent.toFixed(1)}%</div>
+                        </div>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+
+            document.getElementById('simResults').innerHTML = html;
+
+        } catch (e) {
+            document.getElementById('simResults').innerHTML = `<div class="alert alert-danger">Error: ${e}</div>`;
+        }
+    }
 </script>
 {% endblock %}

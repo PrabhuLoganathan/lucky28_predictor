@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Import Game Data (CSV)</h6>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="csv_file" class="form-label">Upload CSV File</label>
+                            <input class="form-control" type="file" id="csv_file" name="csv_file" required>
+                        </div>
+                        <div class="alert alert-secondary">
+                            <strong>CSV Format Required:</strong><br>
+                            The CSV must contain headers. Supported column names:<br>
+                            <ul>
+                                <li>Game No: <code>issue</code>, <code>game_no</code>, or <code>Game No</code></li>
+                                <li>Result: <code>result</code>, <code>winning_number</code>, or <code>Number</code>
+                                </li>
+                            </ul>
+                            Example:<br>
+                            <pre>issue,result
+20230101001,5
+20230101002,14</pre>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-file-upload me-2"></i> Import Data
+                        </button>
+                        <a href="{% url 'pro_dashboard' %}" class="btn btn-secondary ms-2">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
