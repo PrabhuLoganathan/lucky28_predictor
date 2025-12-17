@@ -17,4 +17,8 @@ urlpatterns = [
     path("signals/", views.signals_dashboard, name="signals_dashboard"),
     path("signals/config/", views.signals_config, name="signals_config"),
     path("signals/api/config/<str:action>/", views.signals_config_action, name="signals_config_action"),
+
+    # Pro Analysis
+    path("analysis/", views.pro_dashboard, name="pro_dashboard"),
+    path("analysis/api/simulate/", views.api_analysis_simulate, name="api_analysis_simulate"),
 ]

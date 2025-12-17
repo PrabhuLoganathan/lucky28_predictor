@@ -1,0 +1,468 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">📊 Pro Analysis Dashboard</h1>
+            <p class="text-muted small mb-0">Advanced analytics, visualizations, and predictions</p>
+        </div>
+
+        <!-- Filter Form -->
+        <form method="get" class="d-flex gap-2">
+            <input type="date" name="start_date" class="form-control" value="{{ filters.start_date|default:'' }}"
+                placeholder="Start Date">
+            <input type="date" name="end_date" class="form-control" value="{{ filters.end_date|default:'' }}"
+                placeholder="End Date">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            {% if filters.start_date or filters.end_date %}
+            <a href="{% url 'pro_dashboard' %}" class="btn btn-outline-secondary">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if no_data %}
+    <div class="alert alert-warning">No game data found for the selected period.</div>
+    {% else %}
+
+    <!-- INSIGHTS & PREDICTIONS -->
+    {% if insights %}
+    <div class="alert alert-info border-left-info shadow-sm mb-4" role="alert">
+        <h5 class="alert-heading"><i class="fas fa-lightbulb"></i> Key Insights (Automated)</h5>
+        <ul class="mb-0 ps-3">
+            {% for txt in insights %}
+            <li>{{ txt|safe }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- CHARTS ROW -->
+    <div class="row mb-4">
+        <!-- Frequency Chart -->
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Number Frequency (0-27)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-bar" style="height: 300px;">
+                        <canvas id="freqChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Pie Charts -->
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Distribution</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row h-100">
+                        <div class="col-6 text-center">
+                            <h6>Big vs Small</h6>
+                            <canvas id="bsChart" height="150"></canvas>
+                        </div>
+                        <div class="col-6 text-center">
+                            <h6>Odd vs Even</h6>
+                            <canvas id="oeChart" height="150"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="analysisTab" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab"
+                data-bs-target="#overview">Overview</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="gaps-tab" data-bs-toggle="tab" data-bs-target="#gaps">⏳ Gap Analysis</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="streaks-tab" data-bs-toggle="tab" data-bs-target="#streaks">Streaks</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="repetition-tab" data-bs-toggle="tab"
+                data-bs-target="#repetition">Repetition</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="simulator-tab" data-bs-toggle="tab"
+                data-bs-target="#simulator">Simulator</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="analysisTabContent">
+
+        <!-- OVERVIEW TAB -->
+        <div class="tab-pane fade show active" id="overview">
+            <div class="row">
+                <!-- Detailed Stats Table -->
+                <div class="col-md-4">
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Key Metrics</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-striped mb-0">
+                                <tr>
+                                    <th>Total Games</th>
+                                    <td>{{ stats.total }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Small (0-13)</th>
+                                    <td>{{ stats.small }} ({{ stats.small_pct|floatformat:1 }}%)</td>
+                                </tr>
+                                <tr>
+                                    <th>Big (14-27)</th>
+                                    <td>{{ stats.big }} ({{ stats.big_pct|floatformat:1 }}%)</td>
+                                </tr>
+                                <tr>
+                                    <th>Odd</th>
+                                    <td>{{ stats.odd }} ({{ stats.odd_pct|floatformat:1 }}%)</td>
+                                </tr>
+                                <tr>
+                                    <th>Even</th>
+                                    <td>{{ stats.even }} ({{ stats.even_pct|floatformat:1 }}%)</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <!-- Hot/Cold -->
+                <div class="col-md-8">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card shadow mb-4 border-bottom-danger">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-danger">🔥 Hot Numbers</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        {% for item in hot_list %}
+                                        <tr>
+                                            <td><span class="badge bg-danger rounded-pill">{{ item.number }}</span></td>
+                                            <td>{{ item.count }} hits</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card shadow mb-4 border-bottom-info">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-info">❄️ Cold Numbers</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        {% for item in cold_list %}
+                                        <tr>
+                                            <td><span class="badge bg-info rounded-pill">{{ item.number }}</span></td>
+                                            <td>{{ item.count }} hits</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAP ANALYSIS TAB -->
+        <div class="tab-pane fade" id="gaps">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Category Gaps (Games since last hit)</h6>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Small
+                                    <span
+                                        class="badge {% if gap_data.categories.small > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
+                                        gap_data.categories.small }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Big
+                                    <span
+                                        class="badge {% if gap_data.categories.big > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
+                                        gap_data.categories.big }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Odd
+                                    <span
+                                        class="badge {% if gap_data.categories.odd > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
+                                        gap_data.categories.odd }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Even
+                                    <span
+                                        class="badge {% if gap_data.categories.even > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">{{
+                                        gap_data.categories.even }}</span>
+                                </li>
+                            </ul>
+                            <small class="text-muted mt-2 d-block">Values > 6 are highlighted red.</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Number Gaps Heatmap (0-27)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                {% for n, gap in gap_data.numbers.items %}
+                                <div class="col-3 col-md-2 col-lg-1">
+                                    <div class="p-2 border rounded text-center"
+                                        style="background-color: rgba(220, 53, 69, {{ gap|divisibleby:50|yesno:'0.8,0' }}{% if gap < 10 %}0.1{% elif gap < 30 %}0.3{% else %}0.6{% endif %});">
+                                        <div class="fw-bold">{{ n }}</div>
+                                        <small class="text-xs">Gap: {{ gap }}</small>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STREAKS TAB (Same as before but cleaned up) -->
+        <div class="tab-pane fade" id="streaks">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Current Streaks</h6>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Size: <strong>{{ streaks.size.current_label }}</strong>
+                                    <span class="badge bg-primary">{{ streaks.size.current_len }} in a row</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Parity: <strong>{{ streaks.parity.current_label }}</strong>
+                                    <span class="badge bg-primary">{{ streaks.parity.current_len }} in a row</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Empirical Probabilities (Last 200)</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Outcome</th>
+                                        <th>Prob %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for k, v in probs.items %}
+                                    <tr>
+                                        <td>{{ k|upper }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <span class="me-2">{{ v|floatformat:3 }}</span>
+                                                <div class="progress flex-grow-1" style="height: 5px;">
+                                                    <div class="progress-bar" style="width: {% widthratio v 1 100 %}%;">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REPETITION (Same) -->
+        <div class="tab-pane fade" id="repetition">
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mw-100">
+                            <thead>
+                                <tr>
+                                    <th>Window</th>
+                                    <th>Range</th>
+                                    <th>Status</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in repetition_rows %}
+                                <tr class="{% if row.has_repetition %}table-danger{% else %}table-success{% endif %}">
+                                    <td>{{ row.window_index }}</td>
+                                    <td>{{ row.start_game_idx }} - {{ row.end_game_idx }}</td>
+                                    <td>{% if row.has_repetition %}🔴 Repeat{% else %}🟢 Unique{% endif %}</td>
+                                    <td>{{ row.repeated_detail|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIMULATOR (Same) -->
+        <div class="tab-pane fade" id="simulator">
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <form id="simForm" class="p-3 border rounded">
+                                <h6 class="mb-3">Config</h6>
+                                <div class="mb-3">
+                                    <label>Probability</label>
+                                    <select class="form-select" id="simProb">
+                                        <option value="{{ probs.small }}">Small ({{ probs.small|floatformat:3 }})
+                                        </option>
+                                        <option value="{{ probs.big }}">Big ({{ probs.big|floatformat:3 }})</option>
+                                        <option value="{{ probs.odd }}">Odd ({{ probs.odd|floatformat:3 }})</option>
+                                        <option value="{{ probs.even }}">Even ({{ probs.even|floatformat:3 }})</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label>Current Streak</label>
+                                    <input type="number" class="form-control" id="simCurrent" value="1" min="1">
+                                </div>
+                                <div class="mb-3">
+                                    <label>Simulations</label>
+                                    <input type="number" class="form-control" id="simCount" value="5000">
+                                </div>
+                                <button type="button" onclick="runSimulation()"
+                                    class="btn btn-primary w-100">Run</button>
+                            </form>
+                        </div>
+                        <div class="col-md-8">
+                            <div id="simResults" class="p-3 bg-light border rounded h-100 position-relative">
+                                <div class="position-absolute top-50 start-50 translate-middle text-muted">Results will
+                                    appear here</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    {% endif %}
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// --- Charts ---
+{% if charts_json %}
+const chartData = JSON.parse('{{ charts_json|escapejs }}');
+
+// 1. Freq Chart
+new Chart(document.getElementById('freqChart'), {
+    type: 'bar',
+    data: {
+        labels: chartData.freq.labels,
+        datasets: [{
+            label: 'Frequency',
+            data: chartData.freq.data,
+            backgroundColor: '#4e73df',
+        }]
+    },
+    options: { maintainAspectRatio: false }
+});
+
+// 2. Big/Small
+new Chart(document.getElementById('bsChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Big', 'Small'],
+        datasets: [{
+            data: [chartData.dist.big, chartData.dist.small],
+            backgroundColor: ['#e74a3b', '#1cc88a']
+        }]
+    }
+});
+
+// 3. Odd/Even
+new Chart(document.getElementById('oeChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Odd', 'Even'],
+        datasets: [{
+            data: [chartData.dist.odd, chartData.dist.even],
+            backgroundColor: ['#f6c23e', '#36b9cc']
+        }]
+    }
+});
+{% endif %}
+
+// --- Simulator ---
+async function runSimulation() {
+    const prob = document.getElementById('simProb').value;
+    const current = document.getElementById('simCurrent').value;
+    const sims = document.getElementById('simCount').value;
+    
+    document.getElementById('simResults').innerHTML = '<p class="text-center pt-5">Running...</p>';
+    
+    try {
+        const response = await fetch('/analysis/api/simulate/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                prob: prob,
+                current_len: current,
+                sims: sims,
+                max_extra: 20
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            document.getElementById('simResults').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            return;
+        }
+        
+        let html = '<table class="table table-sm table-bordered bg-white"><thead><tr><th>Final Length</th><th>Count</th><th>Chance (%)</th></tr></thead><tbody>';
+        data.forEach(row => {
+            html += `<tr>
+                <td>${row.length}</td>
+                <td>${row.count}</td>
+                <td style="width: 50%"><div class="progress"><div class="progress-bar" style="width:${row.percent}%">${row.percent.toFixed(1)}%</div></div></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('simResults').innerHTML = html;
+        
+    } catch (e) {
+        document.getElementById('simResults').innerHTML = `<div class="alert alert-danger">Error: ${e}</div>`;
+    }
+}
+</script>
+{% endblock %}

@@ -184,3 +184,145 @@ def signals_config_action(request, action):
             return Response({"error": "Rule not found"}, status=404)
 
     return Response({"error": "Invalid action"}, status=400)
+
+# --- Pro Analysis Dashboard ---
+def pro_dashboard(request):
+    """
+    Main view for the advanced Lucky 28 stats dashboard.
+    Ported from Streamlit.
+    """
+    from .services.analysis import AnalysisService
+    import pandas as pd
+    from django.utils.dateparse import parse_date
+
+    # 1. Filter Logic
+    qs = GameRound.objects.filter(has_winner=True, winning_number__isnull=False).order_by('winner_event_ts')
+    
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    
+    if start_date:
+        qs = qs.filter(winner_event_ts__date__gte=parse_date(start_date))
+    if end_date:
+        qs = qs.filter(winner_event_ts__date__lte=parse_date(end_date))
+        
+    # Limit if no filters to prevent generic overload (Streamlit used max 2000 usually)
+    # But for Django we should perhaps be smarter. Let's just grab all if filtered, or last 2000 if not.
+    if not (start_date or end_date):
+        # We need them in ASC order for analysis, so slice from end? 
+        # Django negative slicing is not supported on queryset.
+        # So we order desc, take 2000, then reverse in python or subquery.
+        # Let's effectively take last 2000.
+        last_ids = GameRound.objects.filter(has_winner=True, winning_number__isnull=False).order_by('-id').values_list('id', flat=True)[:2000]
+        qs = GameRound.objects.filter(id__in=list(last_ids)).order_by('id')
+
+    # Convert to pandas Series for AnalysisService
+    # We only need the winning number for most stats
+    data = list(qs.values_list('winning_number', flat=True))
+    if not data:
+        return render(request, "games/pro_dashboard.html", {"no_data": True})
+
+    series = pd.Series(data)
+    
+    # 2. Compute Stats
+    # A. General & Recent
+    total_len = len(series)
+    # Recent Window (default 50)
+    recent_n = int(request.GET.get('recent_n', 50))
+    hotcold_n = int(request.GET.get('hotcold_n', 100))
+    
+    stats, freq, _ = AnalysisService.compute_stats(series)
+    recent_series = series.tail(recent_n)
+    recent_stats, _, recent_repeated = AnalysisService.compute_stats(recent_series)
+    
+    # B. Hot/Cold
+    # Using window 'hotcold_n'
+    window_series = series.tail(hotcold_n)
+    window_freq = window_series.value_counts()
+    hot_list, cold_list = AnalysisService.get_hot_cold(window_freq, top=5)
+    
+    # C. Streaks
+    streaks = AnalysisService.get_streaks(series)
+    
+    # D. Empirical Probs (last 200)
+    probs = AnalysisService.get_empirical_probs(series, window=200)
+    
+    # E. Repetition Analysis (Last 50 windows of size 10)
+    # Just show last 50 rows of analysis
+    repetition_rows = AnalysisService.analyze_window_repetition(series, window_size=10)
+    if len(repetition_rows) > 50:
+        repetition_rows = repetition_rows[:50]
+        
+    # F. Gap Analysis & Insights
+    gap_data = AnalysisService.get_gap_analysis(series)
+    insights = AnalysisService.get_predictions(gap_data, probs)
+    
+    # G. Chart Data (Serialize for Template)
+    import json
+    # 1. Trend (Last 50)
+    # Convert numpy int64 to native python int list using tolist()
+    trend_data = recent_series.tolist() 
+    trend_labels = [f"#{i}" for i in range(1, len(trend_data)+1)]
+    
+    # 2. Number Freq (Full Series)
+    # 0-27
+    full_freq = series.value_counts().sort_index()
+    freq_data = []
+    freq_labels = [str(i) for i in range(28)]
+    for i in range(28):
+        freq_data.append(int(full_freq.get(i, 0)))
+
+    chart_payload = {
+        "trend": {
+            "labels": trend_labels,
+            "data": trend_data
+        },
+        "freq": {
+            "labels": freq_labels,
+            "data": freq_data
+        },
+        "dist": {
+            "big": stats['big'], "small": stats['small'],
+            "odd": stats['odd'], "even": stats['even']
+        }
+    }
+
+    context = {
+        "stats": stats,
+        "recent_stats": recent_stats,
+        "hot_list": hot_list,
+        "cold_list": cold_list,
+        "streaks": streaks,
+        "probs": probs,
+        "repetition_rows": repetition_rows,
+        "recent_repeated": recent_repeated.to_dict('records') if not recent_repeated.empty else [],
+        "gap_data": gap_data,
+        "insights": insights,
+        "charts_json": json.dumps(chart_payload),
+        "filters": {
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_games": total_len,
+            "recent_n": recent_n,
+            "hotcold_n": hotcold_n
+        }
+    }
+    
+    return render(request, "games/pro_dashboard.html", context)
+
+
+@api_view(["POST"])
+def api_analysis_simulate(request):
+    from .services.analysis import AnalysisService
+    
+    # Expects: target_prob, current_len, sims, max_extra
+    try:
+        p = float(request.data.get("prob", 0.5))
+        c = int(request.data.get("current_len", 1))
+        sims = int(request.data.get("sims", 1000))
+        extra = int(request.data.get("max_extra", 20))
+        
+        results = AnalysisService.simulate_streak(p, c, sims, extra)
+        return Response(results)
+    except Exception as e:
+        return Response({"error": str(e)}, status=400)
