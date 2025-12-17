@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from datetime import datetime, date, time
 from django.utils import timezone
-from .models import GameResult
+from games.models import GameRound
 
 def homepage(request):
     date_str = request.GET.get('date')
@@ -13,18 +13,18 @@ def homepage(request):
     else:
         selected_date = timezone.now().date()
 
-    # Filter by range to ensure robust datetime filtering
+    # Filter by range
     start_of_day = datetime.combine(selected_date, time.min)
     end_of_day = datetime.combine(selected_date, time.max)
     
-    # Make them timezone aware if using TZ
     if timezone.is_aware(timezone.now()):
         start_of_day = timezone.make_aware(start_of_day)
         end_of_day = timezone.make_aware(end_of_day)
 
-    results = GameResult.objects.filter(
-        timestamp__range=(start_of_day, end_of_day)
-    ).order_by('-timestamp')
+    results = GameRound.objects.filter(
+        winner_event_ts__range=(start_of_day, end_of_day),
+        has_winner=True
+    ).order_by('-winner_event_ts')
 
     context = {
         'results': results,

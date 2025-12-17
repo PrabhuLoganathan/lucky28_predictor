@@ -40,6 +40,16 @@ class GameRound(models.Model):
     def __str__(self):
         return f"{self.game_no} ({'winner' if self.has_winner else 'pending'})"
 
+    @property
+    def size_label(self):
+        if self.winning_number is None: return ""
+        return "Big" if 14 <= self.winning_number <= 27 else "Small"
+
+    @property
+    def parity_label(self):
+        if self.winning_number is None: return ""
+        return "Even" if self.winning_number % 2 == 0 else "Odd"
+
 class SignalRule(models.Model):
     RULE_TYPES = [('STREAK', 'Streak'), ('DROUGHT', 'Drought')]
     DIMENSIONS = [('BIG_SMALL', 'Big/Small'), ('ODD_EVEN', 'Odd/Even'), ('COLOR', 'Color')]

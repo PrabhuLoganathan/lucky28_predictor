@@ -13,17 +13,22 @@
 
         <!-- Filter Form -->
         <form method="get" class="d-flex gap-2">
-            <input type="date" name="start_date" class="form-control" value="{{ filters.start_date|default:'' }}" placeholder="Start Date">
-            <input type="date" name="end_date" class="form-control" value="{{ filters.end_date|default:'' }}" placeholder="End Date">
+            <input type="date" name="start_date" class="form-control" value="{{ filters.start_date|default:'' }}"
+                placeholder="Start Date">
+            <input type="date" name="end_date" class="form-control" value="{{ filters.end_date|default:'' }}"
+                placeholder="End Date">
             <button type="submit" class="btn btn-primary">Filter</button>
             {% if filters.start_date or filters.end_date %}
-                <a href="{% url 'pro_dashboard' %}" class="btn btn-outline-secondary">Clear</a>
+            <a href="{% url 'pro_dashboard' %}" class="btn btn-outline-secondary">Clear</a>
             {% endif %}
+            <a href="{% url 'import_games' %}" class="btn btn-warning ms-2">
+                <i class="fas fa-file-import"></i> Import
+            </a>
         </form>
     </div>
 
     {% if no_data %}
-        <div class="alert alert-warning">No game data found for the selected period.</div>
+    <div class="alert alert-warning">No game data found for the selected period.</div>
     {% else %}
 
     <!-- INSIGHTS & PREDICTIONS -->
@@ -32,7 +37,7 @@
         <h5 class="alert-heading"><i class="fas fa-lightbulb"></i> Key Insights (Automated)</h5>
         <ul class="mb-0 ps-3">
             {% for txt in insights %}
-                <li>{{ txt|safe }}</li>
+            <li>{{ txt|safe }}</li>
             {% endfor %}
         </ul>
     </div>
@@ -79,7 +84,8 @@
     <!-- Tabs -->
     <ul class="nav nav-tabs mb-4" id="analysisTab" role="tablist">
         <li class="nav-item">
-            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview">Overview</button>
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab"
+                data-bs-target="#overview">Overview</button>
         </li>
         <li class="nav-item">
             <button class="nav-link" id="gaps-tab" data-bs-toggle="tab" data-bs-target="#gaps">⏳ Gap Analysis</button>
@@ -88,10 +94,12 @@
             <button class="nav-link" id="streaks-tab" data-bs-toggle="tab" data-bs-target="#streaks">Streaks</button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="repetition-tab" data-bs-toggle="tab" data-bs-target="#repetition">Repetition</button>
+            <button class="nav-link" id="repetition-tab" data-bs-toggle="tab"
+                data-bs-target="#repetition">Repetition</button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="simulator-tab" data-bs-toggle="tab" data-bs-target="#simulator">Simulator</button>
+            <button class="nav-link" id="simulator-tab" data-bs-toggle="tab"
+                data-bs-target="#simulator">Simulator</button>
         </li>
     </ul>
 
@@ -108,11 +116,26 @@
                         </div>
                         <div class="card-body p-0">
                             <table class="table table-striped mb-0">
-                                <tr><th>Total Games</th><td>{{ stats.total }}</td></tr>
-                                <tr><th>Small (0-13)</th><td>{{ stats.small }} ({{ stats.small_pct|floatformat:1 }}%)</td></tr>
-                                <tr><th>Big (14-27)</th><td>{{ stats.big }} ({{ stats.big_pct|floatformat:1 }}%)</td></tr>
-                                <tr><th>Odd</th><td>{{ stats.odd }} ({{ stats.odd_pct|floatformat:1 }}%)</td></tr>
-                                <tr><th>Even</th><td>{{ stats.even }} ({{ stats.even_pct|floatformat:1 }}%)</td></tr>
+                                <tr>
+                                    <th>Total Games</th>
+                                    <td>{{ stats.total }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Small (0-13)</th>
+                                    <td>{{ stats.small }} ({{ stats.small_pct|floatformat:1 }}%)</td>
+                                </tr>
+                                <tr>
+                                    <th>Big (14-27)</th>
+                                    <td>{{ stats.big }} ({{ stats.big_pct|floatformat:1 }}%)</td>
+                                </tr>
+                                <tr>
+                                    <th>Odd</th>
+                                    <td>{{ stats.odd }} ({{ stats.odd_pct|floatformat:1 }}%)</td>
+                                </tr>
+                                <tr>
+                                    <th>Even</th>
+                                    <td>{{ stats.even }} ({{ stats.even_pct|floatformat:1 }}%)</td>
+                                </tr>
                             </table>
                         </div>
                     </div>
@@ -175,43 +198,50 @@
                             <ul class="list-group list-group-flush">
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span class="text-danger fw-bold">Red</span>
-                                    <span class="badge {% if gap_data.colors.Red|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.colors.Red|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.colors.Red|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span class="text-warning fw-bold">Yellow</span>
-                                    <span class="badge {% if gap_data.colors.Yellow|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.colors.Yellow|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.colors.Yellow|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span style="color: #ff69b4;" class="fw-bold">Pink</span>
-                                    <span class="badge {% if gap_data.colors.Pink|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.colors.Pink|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.colors.Pink|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span class="text-primary fw-bold">Blue</span>
-                                    <span class="badge {% if gap_data.colors.Blue|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.colors.Blue|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.colors.Blue|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span class="text-info fw-bold">Cyan</span>
-                                    <span class="badge {% if gap_data.colors.Cyan|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.colors.Cyan|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.colors.Cyan|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span class="text-success fw-bold">Green</span>
-                                    <span class="badge {% if gap_data.colors.Green|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.colors.Green|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.colors.Green|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span class="text-secondary fw-bold">Grey</span>
-                                    <span class="badge {% if gap_data.colors.Grey|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.colors.Grey|default:0 > 8 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.colors.Grey|default:0 }}
                                     </span>
                                 </li>
@@ -230,25 +260,29 @@
                             <ul class="list-group list-group-flush">
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span>Small</span>
-                                    <span class="badge {% if gap_data.categories.small|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.categories.small|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.categories.small|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span>Big</span>
-                                    <span class="badge {% if gap_data.categories.big|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.categories.big|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.categories.big|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span>Odd</span>
-                                    <span class="badge {% if gap_data.categories.odd|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.categories.odd|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.categories.odd|default:0 }}
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span>Even</span>
-                                    <span class="badge {% if gap_data.categories.even|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
+                                    <span
+                                        class="badge {% if gap_data.categories.even|default:0 > 6 %}bg-danger{% else %}bg-secondary{% endif %} rounded-pill">
                                         {{ gap_data.categories.even|default:0 }}
                                     </span>
                                 </li>
@@ -269,186 +303,185 @@
                                 {% for n, gap in gap_data.numbers.items %}
                                 <div class="col-3 col-md-2">
                                     {% comment %}
-                                        FIX: build a valid rgba alpha (single value).
+                                    FIX: build a valid rgba alpha (single value).
                                     {% endcomment %}
-                                    {% if gap < 5 %}
-                                        {% with alpha="0.05" %}
-                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
-                                            <div class="fw-bold">{{ n }}</div>
-                                            <small class="text-xs">Gap: {{ gap }}</small>
-                                        </div>
-                                        {% endwith %}
-                                    {% elif gap < 10 %}
-                                        {% with alpha="0.10" %}
-                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
-                                            <div class="fw-bold">{{ n }}</div>
-                                            <small class="text-xs">Gap: {{ gap }}</small>
-                                        </div>
-                                        {% endwith %}
-                                    {% elif gap < 20 %}
-                                        {% with alpha="0.20" %}
-                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
-                                            <div class="fw-bold">{{ n }}</div>
-                                            <small class="text-xs">Gap: {{ gap }}</small>
-                                        </div>
-                                        {% endwith %}
-                                    {% elif gap < 30 %}
-                                        {% with alpha="0.35" %}
-                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
-                                            <div class="fw-bold">{{ n }}</div>
-                                            <small class="text-xs">Gap: {{ gap }}</small>
-                                        </div>
-                                        {% endwith %}
-                                    {% elif gap < 50 %}
-                                        {% with alpha="0.55" %}
-                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
-                                            <div class="fw-bold">{{ n }}</div>
-                                            <small class="text-xs">Gap: {{ gap }}</small>
-                                        </div>
-                                        {% endwith %}
-                                    {% else %}
-                                        {% with alpha="0.75" %}
-                                        <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
-                                            <div class="fw-bold">{{ n }}</div>
-                                            <small class="text-xs">Gap: {{ gap }}</small>
-                                        </div>
-                                        {% endwith %}
-                                    {% endif %}
+                                    {% if gap < 5 %} {% with alpha="0.05" %} <div class="p-2 border rounded text-center"
+                                        style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                        <div class="fw-bold">{{ n }}</div>
+                                        <small class="text-xs">Gap: {{ gap }}</small>
                                 </div>
-                                {% endfor %}
+                                {% endwith %}
+                                {% elif gap < 10 %} {% with alpha="0.10" %} <div class="p-2 border rounded text-center"
+                                    style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                    <div class="fw-bold">{{ n }}</div>
+                                    <small class="text-xs">Gap: {{ gap }}</small>
                             </div>
+                            {% endwith %}
+                            {% elif gap < 20 %} {% with alpha="0.20" %} <div class="p-2 border rounded text-center"
+                                style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                                <div class="fw-bold">{{ n }}</div>
+                                <small class="text-xs">Gap: {{ gap }}</small>
                         </div>
+                        {% endwith %}
+                        {% elif gap < 30 %} {% with alpha="0.35" %} <div class="p-2 border rounded text-center"
+                            style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                            <div class="fw-bold">{{ n }}</div>
+                            <small class="text-xs">Gap: {{ gap }}</small>
                     </div>
+                    {% endwith %}
+                    {% elif gap < 50 %} {% with alpha="0.55" %} <div class="p-2 border rounded text-center"
+                        style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                        <div class="fw-bold">{{ n }}</div>
+                        <small class="text-xs">Gap: {{ gap }}</small>
                 </div>
-
+                {% endwith %}
+                {% else %}
+                {% with alpha="0.75" %}
+                <div class="p-2 border rounded text-center" style="background-color: rgba(220, 53, 69, {{ alpha }});">
+                    <div class="fw-bold">{{ n }}</div>
+                    <small class="text-xs">Gap: {{ gap }}</small>
+                </div>
+                {% endwith %}
+                {% endif %}
             </div>
+            {% endfor %}
         </div>
-
-        <!-- STREAKS TAB -->
-        <div class="tab-pane fade" id="streaks">
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Current Streaks</h6>
-                        </div>
-                        <div class="card-body">
-                            <ul class="list-group">
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Size: <strong>{{ streaks.size.current_label }}</strong>
-                                    <span class="badge bg-primary">{{ streaks.size.current_len }} in a row</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Parity: <strong>{{ streaks.parity.current_label }}</strong>
-                                    <span class="badge bg-primary">{{ streaks.parity.current_len }} in a row</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-6">
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Empirical Probabilities (Last 200)</h6>
-                        </div>
-                        <div class="card-body">
-                            <table class="table table-sm table-hover">
-                                <thead>
-                                    <tr><th>Outcome</th><th>Prob %</th></tr>
-                                </thead>
-                                <tbody>
-                                    {% for k, v in probs.items %}
-                                    <tr>
-                                        <td>{{ k|upper }}</td>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <span class="me-2">{{ v|floatformat:3 }}</span>
-                                                <div class="progress flex-grow-1" style="height: 5px;">
-                                                    <div class="progress-bar" style="width: {% widthratio v 1 100 %}%;"></div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- REPETITION -->
-        <div class="tab-pane fade" id="repetition">
-            <div class="card shadow mb-4">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-sm mw-100">
-                            <thead>
-                                <tr>
-                                    <th>Window</th>
-                                    <th>Range</th>
-                                    <th>Status</th>
-                                    <th>Details</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for row in repetition_rows %}
-                                <tr class="{% if row.has_repetition %}table-danger{% else %}table-success{% endif %}">
-                                    <td>{{ row.window_index }}</td>
-                                    <td>{{ row.start_game_idx }} - {{ row.end_game_idx }}</td>
-                                    <td>{% if row.has_repetition %}🔴 Repeat{% else %}🟢 Unique{% endif %}</td>
-                                    <td>{{ row.repeated_detail|default:"-" }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- SIMULATOR -->
-        <div class="tab-pane fade" id="simulator">
-            <div class="card shadow mb-4">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <form id="simForm" class="p-3 border rounded" onsubmit="return false;">
-                                <h6 class="mb-3">Config</h6>
-                                <div class="mb-3">
-                                    <label>Probability</label>
-                                    <select class="form-select" id="simProb">
-                                        <option value="{{ probs.small }}">Small ({{ probs.small|floatformat:3 }})</option>
-                                        <option value="{{ probs.big }}">Big ({{ probs.big|floatformat:3 }})</option>
-                                        <option value="{{ probs.odd }}">Odd ({{ probs.odd|floatformat:3 }})</option>
-                                        <option value="{{ probs.even }}">Even ({{ probs.even|floatformat:3 }})</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label>Current Streak</label>
-                                    <input type="number" class="form-control" id="simCurrent" value="1" min="1">
-                                </div>
-                                <div class="mb-3">
-                                    <label>Simulations</label>
-                                    <input type="number" class="form-control" id="simCount" value="5000">
-                                </div>
-                                <button type="button" onclick="runSimulation()" class="btn btn-primary w-100">Run</button>
-                            </form>
-                        </div>
-                        <div class="col-md-8">
-                            <div id="simResults" class="p-3 bg-light border rounded h-100 position-relative">
-                                <div class="position-absolute top-50 start-50 translate-middle text-muted">Results will appear here</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>
-    {% endif %}
+</div>
+</div>
+
+</div>
+</div>
+
+<!-- STREAKS TAB -->
+<div class="tab-pane fade" id="streaks">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Current Streaks</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Size: <strong>{{ streaks.size.current_label }}</strong>
+                            <span class="badge bg-primary">{{ streaks.size.current_len }} in a row</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Parity: <strong>{{ streaks.parity.current_label }}</strong>
+                            <span class="badge bg-primary">{{ streaks.parity.current_len }} in a row</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Empirical Probabilities (Last 200)</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Outcome</th>
+                                <th>Prob %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for k, v in probs.items %}
+                            <tr>
+                                <td>{{ k|upper }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">{{ v|floatformat:3 }}</span>
+                                        <div class="progress flex-grow-1" style="height: 5px;">
+                                            <div class="progress-bar" style="width: {% widthratio v 1 100 %}%;"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- REPETITION -->
+<div class="tab-pane fade" id="repetition">
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm mw-100">
+                    <thead>
+                        <tr>
+                            <th>Window</th>
+                            <th>Range</th>
+                            <th>Status</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in repetition_rows %}
+                        <tr class="{% if row.has_repetition %}table-danger{% else %}table-success{% endif %}">
+                            <td>{{ row.window_index }}</td>
+                            <td>{{ row.start_game_idx }} - {{ row.end_game_idx }}</td>
+                            <td>{% if row.has_repetition %}🔴 Repeat{% else %}🟢 Unique{% endif %}</td>
+                            <td>{{ row.repeated_detail|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SIMULATOR -->
+<div class="tab-pane fade" id="simulator">
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <form id="simForm" class="p-3 border rounded" onsubmit="return false;">
+                        <h6 class="mb-3">Config</h6>
+                        <div class="mb-3">
+                            <label>Probability</label>
+                            <select class="form-select" id="simProb">
+                                <option value="{{ probs.small }}">Small ({{ probs.small|floatformat:3 }})</option>
+                                <option value="{{ probs.big }}">Big ({{ probs.big|floatformat:3 }})</option>
+                                <option value="{{ probs.odd }}">Odd ({{ probs.odd|floatformat:3 }})</option>
+                                <option value="{{ probs.even }}">Even ({{ probs.even|floatformat:3 }})</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label>Current Streak</label>
+                            <input type="number" class="form-control" id="simCurrent" value="1" min="1">
+                        </div>
+                        <div class="mb-3">
+                            <label>Simulations</label>
+                            <input type="number" class="form-control" id="simCount" value="5000">
+                        </div>
+                        <button type="button" onclick="runSimulation()" class="btn btn-primary w-100">Run</button>
+                    </form>
+                </div>
+                <div class="col-md-8">
+                    <div id="simResults" class="p-3 bg-light border rounded h-100 position-relative">
+                        <div class="position-absolute top-50 start-50 translate-middle text-muted">Results will appear
+                            here</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+{% endif %}
 </div>
 
 <!-- Chart.js -->

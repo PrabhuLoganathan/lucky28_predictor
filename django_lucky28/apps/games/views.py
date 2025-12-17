@@ -359,26 +359,77 @@ def import_games(request):
                 game_no = row.get('issue') or row.get('game_no') or row.get('Game No')
                 winning_amt = row.get('result') or row.get('winning_number') or row.get('Number')
                 
-                if not game_no or not winning_amt:
+                # Metadata
+                timestamp_str = row.get('timestamp') or row.get('time') or row.get('Time')
+                winners_count = row.get('winners_count')
+                prize_amount = row.get('prize_amount')
+
+                if not winning_amt:
+                    continue
+                    
+                # If game_no is missing but we have timestamp, generate one
+                if not game_no and timestamp_str:
+                    try:
+                        # Attempt to parse timestamp
+                        # Formats: 2025-12-14 21:37:00
+                        ts = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                        # Generate ID: YYYYMMDDHHMM
+                        game_no = ts.strftime('%Y%m%d%H%M')
+                    except ValueError:
+                        pass # Keep game_no empty, will skip later
+
+                if not game_no:
                     continue
                     
                 winning_number = int(winning_amt)
                 
+                # Parse Timestamp
+                winner_event_ts = timezone.now()
+                if timestamp_str:
+                    try:
+                        naive_ts = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                        if timezone.is_aware(timezone.now()):
+                            winner_event_ts = timezone.make_aware(naive_ts)
+                        else:
+                            winner_event_ts = naive_ts
+                    except:
+                        pass
+
                 # Create or Update
+                defaults = {
+                    'winning_number': winning_number,
+                    'has_winner': True,
+                    'winner_event_ts': winner_event_ts,
+                }
+                if winners_count: defaults['winner_count'] = int(winners_count)
+                if prize_amount: defaults['win_total_energy'] = int(prize_amount)
+
                 game, created = GameRound.objects.get_or_create(
                     game_no=game_no,
-                    defaults={
-                        'winning_number': winning_number,
-                        'has_winner': True,
-                        'winner_event_ts': timezone.now() # Default if no time
-                    }
+                    defaults=defaults
                 )
                 
                 # If existing but incomplete
-                if not created and not game.has_winner:
-                    game.winning_number = winning_number
-                    game.has_winner = True
-                    game.save()
+                if not created:
+                    needs_save = False
+                    if not game.has_winner:
+                        game.winning_number = winning_number
+                        game.has_winner = True
+                        needs_save = True
+                    
+                    # Update fields if missing
+                    if winners_count and not game.winner_count:
+                        game.winner_count = int(winners_count)
+                        needs_save = True
+                    if prize_amount and not game.win_total_energy:
+                        game.win_total_energy = int(prize_amount)
+                        needs_save = True
+                    if timestamp_str and not game.winner_event_ts:
+                         game.winner_event_ts = winner_event_ts
+                         needs_save = True
+                         
+                    if needs_save:
+                        game.save()
                     
                 # Calculate winner color
                 if not game.winner_color:

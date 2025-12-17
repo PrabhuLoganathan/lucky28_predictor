@@ -28,14 +28,16 @@
                             <strong>CSV Format Required:</strong><br>
                             The CSV must contain headers. Supported column names:<br>
                             <ul>
-                                <li>Game No: <code>issue</code>, <code>game_no</code>, or <code>Game No</code></li>
+                                <li>Game No: <code>issue</code>, <code>game_no</code> (Optional if timestamp present)
+                                </li>
                                 <li>Result: <code>result</code>, <code>winning_number</code>, or <code>Number</code>
                                 </li>
+                                <li>Time: <code>timestamp</code>, <code>time</code> (Required if Game No missing)</li>
+                                <li>Details: <code>winners_count</code>, <code>prize_amount</code> (Optional)</li>
                             </ul>
                             Example:<br>
-                            <pre>issue,result
-20230101001,5
-20230101002,14</pre>
+                            <pre>timestamp,result,winners_count
+2025-12-14 21:37:00,18,371</pre>
                         </div>
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-file-upload me-2"></i> Import Data
