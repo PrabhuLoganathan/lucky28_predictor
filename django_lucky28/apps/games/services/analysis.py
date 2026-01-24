@@ -3,6 +3,9 @@ import random
 from typing import List, Dict, Tuple, Any
 
 class AnalysisService:
+    def __init__(self, df: pd.DataFrame = None):
+        self.df = df
+
     @staticmethod
     def get_color(n: int) -> str:
         """Return color for number 0-27."""
@@ -292,6 +295,66 @@ class AnalysisService:
             'categories': cat_gaps,
             'colors': color_gaps
         }
+
+    def get_repetition_analysis(self, window=10):
+        """
+        Sliding-window repetition analysis.
+        Returns list of dicts for each window.
+        """
+        if self.df.empty or 'winning_number' not in self.df.columns:
+            return []
+
+        # Ensure sorted by ID/Time
+        # Depending on how df was loaded. Usually it's filtered.
+        # We assume self.df is the relevant dataset
+        # We need to sort ASCENDING for the window slide to make sense naturally
+        # But if self.df is DESC (Dashboard view), we should reverse it or handle indices properly.
+        # Let's assume self.df is sorted DESC (Recent first).
+        # So we reverse it to iterate chronologically? Or iterate backwards.
+        
+        # Taking a copy to be safe
+        df = self.df.copy()
+        
+        # Sort ASC for sliding
+        if 'id' in df.columns:
+            df = df.sort_values('id', ascending=True)
+        else:
+            df = df.sort_index(ascending=True) # Assuming default index is roughly chronological/id-based
+            
+        df = df.dropna(subset=['winning_number'])
+        df['winning_number'] = df['winning_number'].astype(int)
+        
+        n = len(df)
+        if n < window:
+            return []
+
+        rows = []
+        # Iterate windows
+        # Window i ends at index i (inclusive), starts at i - window + 1
+        for i in range(window - 1, n):
+            window_slice = df.iloc[i - window + 1 : i + 1]
+            nums = window_slice['winning_number']
+            
+            # Count freqs
+            counts = nums.value_counts()
+            repeated = counts[counts > 1]
+            has_rep = not repeated.empty
+            
+            # Form details string
+            rep_details = ", ".join([f"{num}x{cnt}" for num, cnt in repeated.items()])
+            
+            rows.append({
+                'window_index': i - window + 2, # 1-based sequential index relative to filtered set
+                'start_game': window_slice.get('game_no', pd.Series(['?']*len(window_slice))).iloc[0],
+                'end_game': window_slice.get('game_no', pd.Series(['?']*len(window_slice))).iloc[-1],
+                'numbers': nums.tolist(),
+                'has_repetition': has_rep,
+                'unique_count': len(counts),
+                'repeated_details': rep_details
+            })
+            
+        # Return sorted by most recent window (DESC)
+        return rows[::-1]
 
     @staticmethod
     def get_predictions(gap_data: Dict[str, Any], probs: Dict[str, float]) -> List[str]:

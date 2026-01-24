@@ -216,40 +216,41 @@ def pro_dashboard(request):
         last_ids = GameRound.objects.filter(has_winner=True, winning_number__isnull=False).order_by('-id').values_list('id', flat=True)[:2000]
         qs = GameRound.objects.filter(id__in=list(last_ids)).order_by('id')
 
-    # Convert to pandas Series for AnalysisService
-    # We only need the winning number for most stats
-    data = list(qs.values_list('winning_number', flat=True))
-    if not data:
+    # Convert to pandas DataFrame for AnalysisService
+    # We need winning_number and game_no/id for advanced analysis
+    df = pd.DataFrame(list(qs.values('id', 'game_no', 'winning_number', 'winner_event_ts', 'winner_count', 'win_total_energy')))
+    if df.empty:
         return render(request, "games/pro_dashboard.html", {"no_data": True})
 
-    series = pd.Series(data)
+    series = df['winning_number']
+    
+    # Instantiate Service
+    service = AnalysisService(df)
     
     # 2. Compute Stats
     # A. General & Recent
     total_len = len(series)
     # Recent Window (default 50)
     recent_n = int(request.GET.get('recent_n', 50))
-    hotcold_n = int(request.GET.get('hotcold_n', 100))
-    
-    stats, freq, _ = AnalysisService.compute_stats(series)
     recent_series = series.tail(recent_n)
+    
+    stats, _, _ = AnalysisService.compute_stats(series)
     recent_stats, _, recent_repeated = AnalysisService.compute_stats(recent_series)
     
     # B. Hot/Cold
-    # Using window 'hotcold_n'
-    window_series = series.tail(hotcold_n)
-    window_freq = window_series.value_counts()
-    hot_list, cold_list = AnalysisService.get_hot_cold(window_freq, top=5)
+    hotcold_n = int(request.GET.get('hotcold_n', 500))
+    hotcold_series = series.tail(hotcold_n)
+    hot_list, cold_list = AnalysisService.get_hot_cold(hotcold_series, top=5)
     
-    # C. Streaks
+    # C. Streaks (Longest/Current)
     streaks = AnalysisService.get_streaks(series)
     
-    # D. Empirical Probs (last 200)
-    probs = AnalysisService.get_empirical_probs(series, window=200)
+    # D. Empirical Probs
+    probs = AnalysisService.get_empirical_probs(series, window=500)
     
     # E. Repetition Analysis (Last 50 windows of size 10)
-    # Just show last 50 rows of analysis
-    repetition_rows = AnalysisService.analyze_window_repetition(series, window_size=10)
+    # Using new instance method
+    repetition_rows = service.get_repetition_analysis(window=10)
     if len(repetition_rows) > 50:
         repetition_rows = repetition_rows[:50]
         
