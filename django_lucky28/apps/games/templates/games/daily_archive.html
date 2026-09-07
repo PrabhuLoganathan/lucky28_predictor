@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Daily archive · Lucky28{% endblock %}
+{% block content %}
+{% for message in messages %}
+<div class="alert alert-{{ message.tags }}" role="alert">{{ message }}</div>
+{% endfor %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1>Daily archive</h1>
+        <p class="text-secondary mb-0">Every saved day, with its own results and analysis. Dates follow {{ history_timezone }}.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'import_games' %}">Import history</a>
+</div>
+<div class="card mb-4"><div class="card-body">
+    <form method="get" class="d-flex flex-wrap align-items-end gap-3">
+        <div><label for="start-date" class="form-label">From</label>
+            <input id="start-date" class="form-control" type="date" name="start_date" value="{{ request.GET.start_date|default:'' }}"></div>
+        <div><label for="end-date" class="form-label">Through</label>
+            <input id="end-date" class="form-control" type="date" name="end_date" value="{{ request.GET.end_date|default:'' }}"></div>
+        <button class="btn btn-primary" type="submit">Filter dates</button>
+        <a class="btn btn-outline-secondary" href="{% url 'daily_archive' %}">All dates</a>
+    </form>
+    {% if archive_form.errors %}<div class="alert alert-danger mt-3 mb-0" role="alert">{{ archive_form.errors }}</div>{% endif %}
+</div></div>
+<p class="text-secondary"><strong class="text-white">{{ saved_days|intcomma }}</strong> saved days &middot;
+    <strong class="text-white">{{ saved_games|intcomma }}</strong> results in this period</p>
+{% if undated_games %}
+<div class="alert alert-warning">{{ undated_games|intcomma }} saved results have no result timestamp. They are retained, but cannot be assigned to a day until their timestamps are supplied.</div>
+{% endif %}
+<div class="card"><div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+        <thead><tr><th class="ps-4">Date</th><th>Results</th><th>Big / Small</th><th>Odd / Even</th><th>Winner entries</th><th>Total prizes</th><th class="text-end pe-4">Actions</th></tr></thead>
+        <tbody>
+        {% for day in days %}
+        <tr>
+            <td class="ps-4 text-nowrap"><a class="text-white" href="{% url 'home' %}?date={{ day.day|date:'Y-m-d' }}">{{ day.day|date:'Y-m-d' }}</a>
+                <div class="text-secondary small">{{ day.first_result|date:'H:i' }}–{{ day.last_result|date:'H:i' }}</div></td>
+            <td>{{ day.total|intcomma }}</td>
+            <td class="text-nowrap">{{ day.big|intcomma }} / {{ day.small|intcomma }}</td>
+            <td class="text-nowrap">{{ day.odd|intcomma }} / {{ day.even|intcomma }}</td>
+            <td>{% if day.winner_records %}{{ day.winners|intcomma }}{% else %}&mdash;{% endif %}</td>
+            <td class="text-warning">{% if day.prize_records %}{{ day.prizes|intcomma }}{% else %}&mdash;{% endif %}</td>
+            <td class="text-end pe-4 text-nowrap">
+                <a class="btn btn-sm btn-outline-light" href="{% url 'homepage' %}?date={{ day.day|date:'Y-m-d' }}">Results</a>
+                <a class="btn btn-sm btn-outline-info" href="{% url 'pro_dashboard' %}?date={{ day.day|date:'Y-m-d' }}">Analysis</a>
+                <a class="btn btn-sm btn-outline-success" href="{% url 'export_day' %}?date={{ day.day|date:'Y-m-d' }}">CSV</a>
+                <a class="btn btn-sm btn-outline-danger" href="{% url 'delete_day' %}?date={{ day.day|date:'Y-m-d' }}" aria-label="Delete {{ day.day|date:'Y-m-d' }}">Delete</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center p-5">No saved results for these dates. <a href="{% url 'import_games' %}">Import a dated CSV</a> to add history.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div></div>
+{% include 'games/pagination.html' %}
+<p class="text-secondary small mt-3">Counts include the results saved so far. Import more history at any time to add to a day.</p>
+{% endblock %}

@@ -1,18 +1,119 @@
-from django.shortcuts import render, get_object_or_404
+import csv
+
+from django.contrib import messages
+from django.shortcuts import render, get_object_or_404, redirect
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.generics import RetrieveAPIView, ListAPIView
 from .models import GameRound
 from .serializers import GameRoundSerializer
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.db.models.functions import Coalesce
+from django.http import HttpResponse
+from django.views.decorators.http import require_http_methods
+from .forms import AnalysisFilterForm, DateRangeForm, DeleteDayForm
+from .services.history import completed_games, daily_summaries, day_context, filter_period
+
+
+def dashboard_context(request):
+    context = day_context(request.GET)
+    day = context['selected_day']
+    games = GameRound.objects.filter(Q(has_winner=False) | Q(winner_event_ts__isnull=False)).annotate(
+        event_ts=Coalesce('winner_event_ts', 'pre_event_ts', 'created_at'),
+    )
+    games = filter_period(games, day, day, field='event_ts').order_by('-event_ts', '-id')
+    if context['date_error']:
+        games = games.none()
+    page = Paginator(games, 50).get_page(request.GET.get('page'))
+    context.update({
+        'games': page,
+        'page_obj': page,
+        'day_summary': daily_summaries(filter_period(completed_games(), day, day)).first(),
+    })
+    return context
 
 def game_dashboard(request):
-    games = GameRound.objects.all().order_by("-created_at")[:50]
-    return render(request, "games/dashboard.html", {"games": games})
+    context = dashboard_context(request)
+    return render(request, "games/dashboard.html", context, status=400 if context['date_error'] else 200)
 
 def game_dashboard_rows(request):
-    games = GameRound.objects.all().order_by("-created_at")[:50]
-    return render(request, "games/dashboard_rows.html", {"games": games})
+    context = dashboard_context(request)
+    return render(request, "games/dashboard_rows.html", context, status=400 if context['date_error'] else 200)
+
+
+def daily_archive(request):
+    form = DateRangeForm(request.GET)
+    valid = form.is_valid()
+    games = completed_games()
+    if valid:
+        games = filter_period(games, form.cleaned_data['start_date'], form.cleaned_data['end_date'])
+    else:
+        games = games.none()
+    days = daily_summaries(games)
+    page = Paginator(days, 30).get_page(request.GET.get('page'))
+    return render(request, 'games/daily_archive.html', {
+        'archive_form': form,
+        'days': page,
+        'page_obj': page,
+        'saved_days': page.paginator.count,
+        'saved_games': games.count(),
+        'undated_games': GameRound.objects.filter(
+            has_winner=True, winning_number__isnull=False, winner_event_ts__isnull=True,
+        ).count(),
+        'history_timezone': timezone.get_current_timezone_name(),
+    }, status=200 if valid else 400)
+
+
+def export_day(request):
+    context = day_context(request.GET)
+    if context['date_error']:
+        return HttpResponse('Enter a valid date in YYYY-MM-DD format.', status=400)
+    day = context['selected_day']
+    games = filter_period(completed_games(), day, day).order_by('-winner_event_ts', '-id')
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="lucky28-{day.isoformat()}.csv"'
+    writer = csv.writer(response, lineterminator='\n')
+    writer.writerow(['result', 'timestamp', 'winners_count', 'prize_amount', 'game_no'])
+    for game in games.iterator():
+        writer.writerow([
+            game.winning_number,
+            timezone.localtime(game.winner_event_ts).replace(tzinfo=None).isoformat(sep=' '),
+            game.winner_count, game.win_total_energy, game.game_no,
+        ])
+    return response
+
+
+@require_http_methods(['GET', 'POST'])
+def delete_day(request):
+    form = DeleteDayForm(request.POST if request.method == 'POST' else request.GET)
+    valid = form.is_valid()
+    day = form.cleaned_data.get('date')
+    games = filter_period(completed_games(), day, day) if day else completed_games().none()
+
+    if request.method == 'POST' and valid:
+        if not form.cleaned_data['confirm']:
+            form.add_error('confirm', 'Confirm deletion to remove this day.')
+            valid = False
+        else:
+            # Django deletes the results and their related signal logs atomically.
+            _, deleted = games.delete()
+            count = deleted.get(GameRound._meta.label, 0)
+            if count:
+                messages.success(request, f'Deleted {count:,} saved results for {day.isoformat()} (UTC).')
+            else:
+                messages.info(request, f'No saved results remain for {day.isoformat()} (UTC).')
+            return redirect('daily_archive')
+
+    return render(request, 'games/delete_day.html', {
+        'delete_form': form,
+        'selected_date': day.isoformat() if day else '',
+        'result_count': games.count(),
+        'history_timezone': timezone.get_current_timezone_name(),
+    }, status=200 if valid else 400)
+
 
 def game_detail(request, game_no):
     return render(request, "games/detail.html", {"game_no": game_no})
@@ -193,34 +294,40 @@ def pro_dashboard(request):
     """
     from .services.analysis import AnalysisService
     import pandas as pd
-    from django.utils.dateparse import parse_date
+    form = AnalysisFilterForm(request.GET)
+    base_context = {
+        'analysis_form': form,
+        'history_timezone': timezone.get_current_timezone_name(),
+    }
+    if not form.is_valid():
+        return render(request, 'games/pro_dashboard.html', {
+            **base_context, 'no_data': True,
+        }, status=400)
 
-    # 1. Filter Logic
-    qs = GameRound.objects.filter(has_winner=True, winning_number__isnull=False).order_by('winner_event_ts')
-    
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-    
-    if start_date:
-        qs = qs.filter(winner_event_ts__date__gte=parse_date(start_date))
-    if end_date:
-        qs = qs.filter(winner_event_ts__date__lte=parse_date(end_date))
-        
-    # Limit if no filters to prevent generic overload (Streamlit used max 2000 usually)
-    # But for Django we should perhaps be smarter. Let's just grab all if filtered, or last 2000 if not.
-    if not (start_date or end_date):
-        # We need them in ASC order for analysis, so slice from end? 
-        # Django negative slicing is not supported on queryset.
-        # So we order desc, take 2000, then reverse in python or subquery.
-        # Let's effectively take last 2000.
-        last_ids = GameRound.objects.filter(has_winner=True, winning_number__isnull=False).order_by('-id').values_list('id', flat=True)[:2000]
-        qs = GameRound.objects.filter(id__in=list(last_ids)).order_by('id')
+    start_date = form.cleaned_data['start_date']
+    end_date = form.cleaned_data['end_date']
+    selected_date = form.cleaned_data['date']
+    if selected_date or not (start_date or end_date):
+        selection = day_context({'date': selected_date.isoformat()} if selected_date else {})
+        base_context.update(selection)
+        start_date = end_date = selection['selected_day']
+
+    qs = filter_period(completed_games(), start_date, end_date).order_by('winner_event_ts', 'id')
+    recent_n = form.cleaned_data['recent_n'] or 50
+    hotcold_n = form.cleaned_data['hotcold_n'] or 500
+    base_context['filters'] = {
+        'start_date': start_date.isoformat() if start_date else '',
+        'end_date': end_date.isoformat() if end_date else '',
+        'recent_n': recent_n,
+        'hotcold_n': hotcold_n,
+        'total_games': 0,
+    }
 
     # Convert to pandas DataFrame for AnalysisService
     # We need winning_number and game_no/id for advanced analysis
     df = pd.DataFrame(list(qs.values('id', 'game_no', 'winning_number', 'winner_event_ts', 'winner_count', 'win_total_energy')))
     if df.empty:
-        return render(request, "games/pro_dashboard.html", {"no_data": True})
+        return render(request, "games/pro_dashboard.html", {**base_context, "no_data": True})
 
     series = df['winning_number']
     
@@ -231,16 +338,14 @@ def pro_dashboard(request):
     # A. General & Recent
     total_len = len(series)
     # Recent Window (default 50)
-    recent_n = int(request.GET.get('recent_n', 50))
     recent_series = series.tail(recent_n)
     
     stats, _, _ = AnalysisService.compute_stats(series)
     recent_stats, _, recent_repeated = AnalysisService.compute_stats(recent_series)
     
     # B. Hot/Cold
-    hotcold_n = int(request.GET.get('hotcold_n', 500))
     hotcold_series = series.tail(hotcold_n)
-    hot_list, cold_list = AnalysisService.get_hot_cold(hotcold_series, top=5)
+    hot_list, cold_list = AnalysisService.get_hot_cold(hotcold_series.value_counts(), top=5)
     
     # C. Streaks (Longest/Current)
     streaks = AnalysisService.get_streaks(series)
@@ -250,9 +355,7 @@ def pro_dashboard(request):
     
     # E. Repetition Analysis (Last 50 windows of size 10)
     # Using new instance method
-    repetition_rows = service.get_repetition_analysis(window=10)
-    if len(repetition_rows) > 50:
-        repetition_rows = repetition_rows[:50]
+    repetition_rows = service.get_repetition_analysis(window=10, limit=50)
         
     # F. Gap Analysis & Insights
     gap_data = AnalysisService.get_gap_analysis(series)
@@ -263,7 +366,8 @@ def pro_dashboard(request):
     # 1. Trend (Last 50)
     # Convert numpy int64 to native python int list using tolist()
     trend_data = recent_series.tolist() 
-    trend_labels = [f"#{i}" for i in range(1, len(trend_data)+1)]
+    trend_labels = [timezone.localtime(value).strftime('%m-%d %H:%M')
+                    for value in df['winner_event_ts'].tail(recent_n)]
     
     # 2. Number Freq (Full Series)
     # 0-27
@@ -289,6 +393,7 @@ def pro_dashboard(request):
     }
 
     context = {
+        **base_context,
         "stats": stats,
         "recent_stats": recent_stats,
         "hot_list": hot_list,
@@ -301,11 +406,8 @@ def pro_dashboard(request):
         "insights": insights,
         "charts_json": json.dumps(chart_payload),
         "filters": {
-            "start_date": start_date,
-            "end_date": end_date,
+            **base_context['filters'],
             "total_games": total_len,
-            "recent_n": recent_n,
-            "hotcold_n": hotcold_n
         }
     }
     
@@ -329,128 +431,25 @@ def api_analysis_simulate(request):
         return Response({"error": str(e)}, status=400)
 
 
-# --- Import ---
-from django.contrib import messages
-from django.shortcuts import redirect
-import csv
-from io import TextIOWrapper
-from datetime import datetime
-from django.utils import timezone
-
 def import_games(request):
     if request.method == "POST":
-        csv_file = request.FILES.get('csv_file')
-        if not csv_file:
-            messages.error(request, "No file uploaded.")
-            return redirect('import_games')
-        
-        if not csv_file.name.endswith('.csv'):
-            messages.error(request, "Please upload a CSV file.")
-            return redirect('import_games')
+        from .services.imports import import_history
 
+        files = request.FILES.getlist('csv_file')
+        if not files:
+            messages.error(request, 'Please select at least one CSV file.')
+            return redirect('import_games')
         try:
-            # Read CSV
-            file_data = TextIOWrapper(csv_file.file, encoding='utf-8')
-            reader = csv.DictReader(file_data)
-            
-            count = 0
-            for row in reader:
-                # Expected columns: issue, winning_number, time (optional)
-                # Map various common names
-                game_no = row.get('issue') or row.get('game_no') or row.get('Game No')
-                winning_amt = row.get('result') or row.get('winning_number') or row.get('Number')
-                
-                # Metadata
-                timestamp_str = row.get('timestamp') or row.get('time') or row.get('Time')
-                winners_count = row.get('winners_count')
-                prize_amount = row.get('prize_amount')
-
-                if not winning_amt:
-                    continue
-                    
-                # If game_no is missing but we have timestamp, generate one
-                if not game_no and timestamp_str:
-                    try:
-                        # Attempt to parse timestamp
-                        # Formats: 2025-12-14 21:37:00
-                        ts = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-                        # Generate ID: YYYYMMDDHHMM
-                        game_no = ts.strftime('%Y%m%d%H%M')
-                    except ValueError:
-                        pass # Keep game_no empty, will skip later
-
-                if not game_no:
-                    continue
-                    
-                winning_number = int(winning_amt)
-                
-                # Parse Timestamp
-                winner_event_ts = timezone.now()
-                if timestamp_str:
-                    try:
-                        naive_ts = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
-                        if timezone.is_aware(timezone.now()):
-                            winner_event_ts = timezone.make_aware(naive_ts)
-                        else:
-                            winner_event_ts = naive_ts
-                    except:
-                        pass
-
-                # Create or Update
-                defaults = {
-                    'winning_number': winning_number,
-                    'has_winner': True,
-                    'winner_event_ts': winner_event_ts,
-                }
-                if winners_count: defaults['winner_count'] = int(winners_count)
-                if prize_amount: defaults['win_total_energy'] = int(prize_amount)
-
-                game, created = GameRound.objects.get_or_create(
-                    game_no=game_no,
-                    defaults=defaults
-                )
-                
-                # If existing but incomplete
-                if not created:
-                    needs_save = False
-                    if not game.has_winner:
-                        game.winning_number = winning_number
-                        game.has_winner = True
-                        needs_save = True
-                    
-                    # Update fields if missing
-                    if winners_count and not game.winner_count:
-                        game.winner_count = int(winners_count)
-                        needs_save = True
-                    if prize_amount and not game.win_total_energy:
-                        game.win_total_energy = int(prize_amount)
-                        needs_save = True
-                    if timestamp_str and not game.winner_event_ts:
-                         game.winner_event_ts = winner_event_ts
-                         needs_save = True
-                         
-                    if needs_save:
-                        game.save()
-                    
-                # Calculate winner color
-                if not game.winner_color:
-                    game.winner_color = get_winning_color(winning_number)
-                    game.save()
-                
-                # Also Trigger Signal Scanning for this imported game?
-                # User said: "Once the signal is detected it should reset..."
-                # If we import historical data, we might trigger OLD signals.
-                # But that's probably okay for "Backfill".
-                from .services.signals import SignalAnalyzer
-                analyzer = SignalAnalyzer()
-                analyzer.analyze_game(game)
-
-                count += 1
-                
-            messages.success(request, f"Successfully imported {count} games.")
-        except Exception as e:
-            messages.error(request, f"Error processing file: {str(e)}")
-            
+            summary = import_history(files)
+            dates = ', '.join(day.isoformat() for day in sorted(summary['dates']))
+            messages.success(request, (
+                f"Added {summary['created']} results, updated {summary['updated']}, "
+                f"already saved {summary['unchanged']}. Dates: {dates}."
+            ))
+        except (ValueError, UnicodeError, csv.Error) as error:
+            messages.error(request, f'Import cancelled; no changes saved. {error}')
         return redirect('import_games')
-        
-    return render(request, "games/import_games.html")
+
+    return render(request, 'games/import_games.html', {
+        'history_timezone': timezone.get_current_timezone_name(),
+    })

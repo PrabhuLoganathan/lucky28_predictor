@@ -1,0 +1,24 @@
+<div class="card mb-4">
+    <div class="card-body">
+        {% if day_form.errors %}<div class="alert alert-danger" role="alert">{{ day_form.errors }}</div>{% endif %}
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-3">
+            <form method="get" class="d-flex align-items-end gap-2">
+                <div>
+                    <label for="history-date" class="form-label">Date ({{ history_timezone }})</label>
+                    <input type="date" id="history-date" name="date" class="form-control"
+                        value="{{ selected_date }}" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Show day</button>
+            </form>
+            <div class="d-flex flex-wrap gap-2">
+                {% if previous_day %}<a class="btn btn-outline-secondary" href="?date={{ previous_day }}">&larr; Older day</a>{% endif %}
+                {% if next_day %}<a class="btn btn-outline-secondary" href="?date={{ next_day }}">Newer day &rarr;</a>{% endif %}
+                <a class="btn btn-outline-light" href="{% url 'daily_archive' %}">All saved days</a>
+                {% if selected_date %}
+                <a class="btn btn-outline-info" href="{% url 'pro_dashboard' %}?date={{ selected_date }}">Analyze day</a>
+                <a class="btn btn-outline-success" href="{% url 'export_day' %}?date={{ selected_date }}">Download CSV</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

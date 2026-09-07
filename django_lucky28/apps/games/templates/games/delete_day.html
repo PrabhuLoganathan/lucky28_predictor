@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Delete saved day · Lucky28{% endblock %}
+{% block content %}
+<div class="mx-auto" style="max-width: 680px;">
+    <h1 class="h3 mb-4">Delete saved day</h1>
+    <div class="card"><div class="card-body">
+        {% if delete_form.errors %}
+        <div class="alert alert-danger" role="alert">{{ delete_form.errors }}</div>
+        {% endif %}
+        {% if result_count %}
+        <p class="fs-5">Remove <strong>{{ result_count|intcomma }} saved results</strong> for <strong>{{ selected_date }}</strong> ({{ history_timezone }})?</p>
+        <p class="text-secondary">This permanently deletes these results and their associated signal history.</p>
+        <p><a href="{% url 'export_day' %}?date={{ selected_date }}">Download this day's CSV</a> before deleting if you want to keep a copy.</p>
+        <form method="post" action="{% url 'delete_day' %}" class="d-flex flex-wrap gap-2 mt-4">
+            {% csrf_token %}
+            <input type="hidden" name="date" value="{{ selected_date }}">
+            <button type="submit" name="confirm" value="true" class="btn btn-danger">Delete {{ result_count|intcomma }} results</button>
+            <a class="btn btn-outline-secondary" href="{% url 'daily_archive' %}">Cancel</a>
+        </form>
+        {% else %}
+        {% if selected_date %}<p>No saved results remain for {{ selected_date }} ({{ history_timezone }}).</p>{% endif %}
+        <a class="btn btn-outline-secondary" href="{% url 'daily_archive' %}">Back to daily archive</a>
+        {% endif %}
+    </div></div>
+</div>
+{% endblock %}

@@ -5,27 +5,28 @@
 {% block content %}
 <div class="container-fluid py-4">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h1 class="h3 mb-0 text-gray-800">📊 Pro Analysis Dashboard</h1>
-            <p class="text-muted small mb-0">Advanced analytics, visualizations, and predictions</p>
+            <p class="text-muted small mb-0">{% if selected_date %}All saved results for {{ selected_date }}{% else %}Analysis for the selected date range{% endif %} &middot; {{ history_timezone }}</p>
         </div>
 
-        <!-- Filter Form -->
-        <form method="get" class="d-flex gap-2">
-            <input type="date" name="start_date" class="form-control" value="{{ filters.start_date|default:'' }}"
-                placeholder="Start Date">
-            <input type="date" name="end_date" class="form-control" value="{{ filters.end_date|default:'' }}"
-                placeholder="End Date">
-            <button type="submit" class="btn btn-primary">Filter</button>
-            {% if filters.start_date or filters.end_date %}
-            <a href="{% url 'pro_dashboard' %}" class="btn btn-outline-secondary">Clear</a>
-            {% endif %}
-            <a href="{% url 'import_games' %}" class="btn btn-warning ms-2">
-                <i class="fas fa-file-import"></i> Import
-            </a>
-        </form>
+        <a href="{% url 'import_games' %}" class="btn btn-warning">Import history</a>
     </div>
+
+    {% include 'games/day_navigation.html' %}
+    <div class="card mb-4"><div class="card-body">
+        <form method="get" class="d-flex flex-wrap align-items-end gap-3">
+            <div><label for="analysis-start" class="form-label">From</label>
+                <input type="date" id="analysis-start" name="start_date" class="form-control" value="{{ filters.start_date|default:'' }}"></div>
+            <div><label for="analysis-end" class="form-label">Through</label>
+                <input type="date" id="analysis-end" name="end_date" class="form-control" value="{{ filters.end_date|default:'' }}"></div>
+            <button type="submit" class="btn btn-outline-primary">Analyze range</button>
+            <a href="{% url 'pro_dashboard' %}" class="btn btn-outline-secondary">Latest day</a>
+        </form>
+        {% if analysis_form.errors %}<div class="alert alert-danger mt-3 mb-0" role="alert">{{ analysis_form.errors }}</div>{% endif %}
+    </div></div>
+    {% if not no_data %}<p class="text-secondary">Analyzing <strong class="text-white">{{ filters.total_games|intcomma }}</strong> saved results in time order.</p>{% endif %}
 
     {% if no_data %}
     <div class="alert alert-warning">No game data found for the selected period.</div>

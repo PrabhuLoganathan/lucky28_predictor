@@ -2,31 +2,10 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container py-3" style="max-width: 600px;">
-    <!-- Header / Tabs -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <a href="/" class="text-white text-decoration-none fs-4"><i class="fas fa-arrow-left"></i></a>
-        <div class="btn-group" role="group">
-            <button type="button" class="btn btn-outline-secondary text-white-50">Rank</button>
-            <button type="button" class="btn btn-primary">History</button>
-        </div>
-        <div style="width: 24px;"></div> <!-- Spacer -->
-    </div>
-
-    <!-- Date & Filters -->
-    <div class="card bg-dark border-secondary mb-3">
-        <div class="card-body p-2 d-flex justify-content-between align-items-center">
-            <form method="get" id="dateFilterForm" class="m-0">
-                <input type="date" name="date" class="form-control form-control-sm bg-dark text-white border-secondary"
-                    style="width: 130px; border-radius: 8px;" value="{{ selected_date }}" onchange="this.form.submit()">
-            </form>
-
-            <div class="bg-secondary bg-opacity-25 rounded-pill p-1 d-flex">
-                <button class="btn btn-sm btn-primary rounded-pill px-3 py-1 scale-btn">All</button>
-                <button class="btn btn-sm text-white-50 rounded-pill px-3 py-1 scale-btn">My</button>
-            </div>
-        </div>
-    </div>
+<div class="container py-3" style="max-width: 960px;">
+    <h1 class="h3 mb-3">History for {{ selected_date }}</h1>
+    {% include 'games/day_navigation.html' %}
+    {% include 'games/day_summary.html' %}
 
     <!-- List Header -->
     <div class="d-flex text-secondary text-center small mb-2 px-2">
@@ -57,13 +36,13 @@
 
                 <!-- Winners -->
                 <div class="flex-fill fw-bold text-white-50">
-                    {{ item.winner_count|default:"-" }}
+                    {{ item.winner_count|default_if_none:"-" }}
                 </div>
 
                 <!-- Prizes -->
                 <div class="flex-fill fw-bold text-warning d-flex align-items-center justify-content-center gap-1">
                     <img src="https://webapp.chametw.com/_nuxt/diamond.B_IneHNi.png" width="14" alt="dim">
-                    {% if item.win_total_energy %}
+                    {% if item.win_total_energy is not None %}
                     {{ item.win_total_energy|intcomma }}
                     {% else %}
                     -
@@ -78,6 +57,7 @@
         </div>
         {% endfor %}
     </div>
+    {% include 'games/pagination.html' %}
 </div>
 
 <style>

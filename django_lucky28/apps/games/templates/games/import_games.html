@@ -6,33 +6,35 @@
         <div class="col-md-8">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Import Game Data (CSV)</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">Import daily history</h6>
                 </div>
                 <div class="card-body">
                     {% if messages %}
                     {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                     {% endfor %}
                     {% endif %}
 
+                    <p>Upload one or more CSV files. Results are saved under their original dates in {{ history_timezone }}, and previously saved days remain available in the <a href="{% url 'daily_archive' %}">daily archive</a>.</p>
+                    <p class="text-secondary small">A file can contain several days. Re-uploading the same results does not add duplicates. If a row is invalid or conflicts with saved data, the upload is cancelled with an error.</p>
                     <form method="post" enctype="multipart/form-data">
                         {% csrf_token %}
                         <div class="mb-3">
-                            <label for="csv_file" class="form-label">Upload CSV File</label>
-                            <input class="form-control" type="file" id="csv_file" name="csv_file" required>
+                            <label for="csv_file" class="form-label">CSV files</label>
+                            <input class="form-control" type="file" id="csv_file" name="csv_file" accept=".csv,text/csv" multiple required>
                         </div>
                         <div class="alert alert-secondary">
                             <strong>CSV Format Required:</strong><br>
                             The CSV must contain headers. Supported column names:<br>
                             <ul>
-                                <li>Game No: <code>issue</code>, <code>game_no</code> (Optional if timestamp present)
+                                <li>Game No: <code>issue</code>, <code>game_no</code> (Optional)
                                 </li>
                                 <li>Result: <code>result</code>, <code>winning_number</code>, or <code>Number</code>
                                 </li>
-                                <li>Time: <code>timestamp</code>, <code>time</code> (Required if Game No missing)</li>
+                                <li>Time: <code>timestamp</code>, <code>time</code> (Required, including the date)</li>
                                 <li>Details: <code>winners_count</code>, <code>prize_amount</code> (Optional)</li>
                             </ul>
                             Example:<br>

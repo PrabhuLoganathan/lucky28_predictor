@@ -6,12 +6,15 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="mb-0">Game Dashboard</h1>
-        <p class="text-secondary mb-0">Live monitor</p>
+        <p class="text-secondary mb-0">Results for {{ selected_date }} &middot; {{ history_timezone }}</p>
     </div>
     <div class="d-flex align-items-center gap-2">
         <button class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#newGameModal">New Game</button>
     </div>
 </div>
+
+{% include 'games/day_navigation.html' %}
+{% include 'games/day_summary.html' %}
 
 <!-- New Game Modal -->
 <div class="modal fade" id="newGameModal" tabindex="-1">
@@ -61,8 +64,8 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Recent Games</span>
-                <span class="badge bg-dark border border-secondary text-secondary">Latest 50</span>
+                <span>Games for {{ selected_date }}</span>
+                <span class="badge bg-dark border border-secondary text-secondary">{{ page_obj.paginator.count }} saved games</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -81,78 +84,7 @@
                             </tr>
                         </thead>
                         <tbody id="gamesTableBody">
-                            {% for game in games %}
-                            <tr>
-                                <td class="ps-4 fw-medium text-white">{{ game.game_no }}</td>
-                                <td class="text-secondary">{{ game.latest_statistic|default:"-" }}</td>
-                                <td class="text-secondary small">
-                                    {% if game.rate_big %}
-                                    <div class="d-flex gap-2">
-                                        <span>B: {{ game.rate_big }}</span>
-                                        <span>S: {{ game.rate_small }}</span>
-                                    </div>
-                                    <div class="d-flex gap-2 text-muted">
-                                        <span>E: {{ game.rate_even }}</span>
-                                        <span>O: {{ game.rate_odd }}</span>
-                                    </div>
-                                    {% else %}
-                                    -
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if game.winning_number is not None %}
-                                    <div class="d-flex align-items-center gap-2">
-                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
-                                            style="width: 32px; height: 32px; font-weight: bold;">
-                                            {{ game.winning_number }}
-                                        </div>
-                                        <small class="text-muted">{{ game.reward_type }}</small>
-                                    </div>
-                                    {% else %}
-                                    <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if game.winner_color == 'Red' %}
-                                    <span class="badge bg-danger">Red</span>
-                                    {% elif game.winner_color == 'Yellow' %}
-                                    <span class="badge bg-warning text-dark">Yellow</span>
-                                    {% elif game.winner_color == 'Pink' %}
-                                    <span class="badge" style="background-color: #ff69b4;">Pink</span>
-                                    {% elif game.winner_color == 'Blue' %}
-                                    <span class="badge bg-primary">Blue</span>
-                                    {% elif game.winner_color == 'Cyan' %}
-                                    <span class="badge bg-info text-dark">Cyan</span>
-                                    {% elif game.winner_color == 'Green' %}
-                                    <span class="badge bg-success">Green</span>
-                                    {% elif game.winner_color == 'Grey' %}
-                                    <span class="badge bg-secondary">Grey</span>
-                                    {% else %}
-                                    <span class="text-muted small">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if game.has_winner %}
-                                    <span class="badge badge-status-winner rounded-pill px-3">Winner</span>
-                                    {% elif game.has_pre %}
-                                    <span class="badge badge-status-pending rounded-pill px-3">Pending</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary rounded-pill px-3">Unknown</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-secondary small">
-                                    {{ game.created_at|date:"H:i:s" }}
-                                </td>
-                                <td class="text-end pe-4">
-                                    <a href="{% url 'game_detail' game.game_no %}"
-                                        class="btn btn-sm btn-outline-light">Details</a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center py-5 text-muted">No games found.</td>
-                            </tr>
-                            {% endfor %}
+                            {% include "games/dashboard_rows.html" %}
                         </tbody>
                     </table>
                 </div>
@@ -160,6 +92,7 @@
         </div>
     </div>
 </div>
+{% include 'games/pagination.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -202,7 +135,8 @@
 
     async function refreshTable() {
         try {
-            const response = await fetch('/games/dashboard/rows/');
+            const params = new URLSearchParams({date: '{{ selected_date|escapejs }}', page: '{{ page_obj.number }}'});
+            const response = await fetch('/games/dashboard/rows/?' + params.toString());
             if (response.ok) {
                 const html = await response.text();
                 document.getElementById('gamesTableBody').innerHTML = html;

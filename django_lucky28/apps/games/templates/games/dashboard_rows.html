@@ -58,7 +58,7 @@
         {% endif %}
     </td>
     <td class="text-secondary small">
-        {{ game.created_at|date:"H:i:s" }}
+        {{ game.event_ts|date:"Y-m-d H:i:s" }}
     </td>
     <td class="text-end pe-4">
         <a href="{% url 'game_detail' game.game_no %}" class="btn btn-sm btn-outline-light">Details</a>
@@ -66,6 +66,6 @@
 </tr>
 {% empty %}
 <tr>
-    <td colspan="7" class="text-center py-5 text-muted">No games found.</td>
+    <td colspan="8" class="text-center py-5 text-muted">No games found for {{ selected_date }}.</td>
 </tr>
 {% endfor %}

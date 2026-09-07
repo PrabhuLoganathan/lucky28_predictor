@@ -1,0 +1,19 @@
+{% load humanize %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+        <div class="text-secondary small">Saved results</div>
+        <div class="fs-3 fw-bold">{{ day_summary.total|default:0|intcomma }}</div>
+    </div></div></div>
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+        <div class="text-secondary small">Big / Small</div>
+        <div class="fs-4">{{ day_summary.big|default:0|intcomma }} / {{ day_summary.small|default:0|intcomma }}</div>
+    </div></div></div>
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+        <div class="text-secondary small">Odd / Even</div>
+        <div class="fs-4">{{ day_summary.odd|default:0|intcomma }} / {{ day_summary.even|default:0|intcomma }}</div>
+    </div></div></div>
+    <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body">
+        <div class="text-secondary small">Total prizes</div>
+        <div class="fs-4 text-warning text-break">{% if day_summary.prize_records %}{{ day_summary.prizes|intcomma }}{% else %}&mdash;{% endif %}</div>
+    </div></div></div>
+</div>
