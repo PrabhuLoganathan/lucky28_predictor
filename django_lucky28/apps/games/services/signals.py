@@ -1,13 +1,14 @@
 import logging
 from games.models import GameRound, SignalRule, SignalLog
 from games.services.whatsapp import WhatsAppService
-from games.views import get_winning_color
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
 class SignalAnalyzer:
-    def __init__(self):
-        self.whatsapp = WhatsAppService()
+    def __init__(self, notify=True):
+        self.notify = notify
+        self.whatsapp = WhatsAppService() if notify else None
 
     def analyze_game(self, game_round):
         """
@@ -22,8 +23,14 @@ class SignalAnalyzer:
         # Let's fetch last 100 winners.
         history = GameRound.objects.filter(
             has_winner=True, 
-            winning_number__isnull=False
-        ).order_by('-winner_event_ts')[:100]
+            winning_number__isnull=False,
+        ).filter(Q(game_type='lucky28') | Q(game_type__isnull=True) | Q(game_type=''))
+        if game_round.winner_event_ts:
+            history = history.filter(
+                Q(winner_event_ts__lt=game_round.winner_event_ts)
+                | Q(winner_event_ts=game_round.winner_event_ts, pk__lte=game_round.pk)
+            )
+        history = history.order_by('-winner_event_ts', '-id')[:100]
 
         if not history:
             return
@@ -112,6 +119,8 @@ class SignalAnalyzer:
                     rule=rule,
                     value=current_value
                 )
+                if not self.notify:
+                    return
                 
                 # Count signals today
                 from django.utils import timezone
@@ -138,4 +147,3 @@ class SignalAnalyzer:
                     self.whatsapp.send_message_raw(recipient, msg)
                 else:
                     logger.warning("Signal detected but no ADMIN_PHONE Configured.")
-

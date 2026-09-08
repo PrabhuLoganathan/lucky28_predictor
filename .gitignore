@@ -3,3 +3,9 @@
 django_lucky28/gameapp/.DS_Store
 .DS_Store
 /.venv
+/.local/
+.env
+node_modules/
+dist/
+test-results/
+playwright-report/

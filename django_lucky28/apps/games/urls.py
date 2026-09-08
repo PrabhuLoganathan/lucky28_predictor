@@ -1,7 +1,10 @@
 from django.urls import path
 from . import views
+from . import logger_api
 
 urlpatterns = [
+    path('api/logger/health/', logger_api.health, name='logger_health'),
+    path('api/logger/events/', logger_api.events, name='logger_events'),
     path("api/games/pre/", views.upsert_pre),
     path("api/games/<str:game_no>/winner/", views.update_winner),
     path("api/games/<str:game_no>/", views.GameRoundRetrieve.as_view()),

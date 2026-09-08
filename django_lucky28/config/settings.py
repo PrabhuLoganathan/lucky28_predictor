@@ -1,8 +1,13 @@
 from pathlib import Path
 import sys
 import os
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BASE_DIR.parent
+load_dotenv(PROJECT_ROOT / '.env')
+LOGGER_TOKEN_FILE = PROJECT_ROOT / '.local' / 'logger-token'
+LOGGER_API_TOKEN = os.environ.get('LUCKY28_LOGGER_TOKEN', '')
 
 # Add 'apps' to sys.path
 sys.path.append(str(BASE_DIR / 'apps'))
@@ -56,7 +61,7 @@ ASGI_APPLICATION = 'config.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': str(BASE_DIR.parent / 'lucky28.db'),
+        'NAME': str(PROJECT_ROOT / os.environ.get('LUCKY28_DB_PATH', 'lucky28.db')),
     }
 }
 

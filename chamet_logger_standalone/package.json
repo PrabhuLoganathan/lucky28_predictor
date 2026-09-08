@@ -1,0 +1,19 @@
+{
+  "name": "lucky28-chamet-logger",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Lucky Number capture and local Django signal feedback",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node --env-file-if-exists=../.env dist/main.js",
+    "test": "npm run build && node --test dist/tests/*.test.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.57.0",
+    "typescript": "5.9.3",
+    "@types/node": "25.0.0"
+  }
+}
