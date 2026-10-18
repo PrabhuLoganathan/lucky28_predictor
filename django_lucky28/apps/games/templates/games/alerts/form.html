@@ -1,0 +1,27 @@
+{% extends 'games/alerts/layout.html' %}
+{% block alert_content %}
+<div class="mb-4"><h2 class="alert-page-title">{{ title }}</h2><p class="text-secondary mt-2">{{ subtitle }}</p></div>
+<div class="card alert-form"><div class="card-body"><form method="post">{% csrf_token %}{% include 'games/alerts/form_fields.html' %}<div class="alert-toolbar"><button class="btn btn-primary px-4" type="submit">Save</button><a class="btn btn-outline-secondary" href="{% url back_url %}">Cancel</a></div></form></div></div>
+{% if rule_form %}{{ values_map|json_script:'alert-values' }}{% endif %}
+{% endblock %}
+{% block scripts %}{% if rule_form %}<script>
+const options = JSON.parse(document.getElementById('alert-values').textContent);
+const series = document.getElementById('id_series'), mode = document.getElementById('id_mode');
+function updateValues() {
+  const values = options[series.value] || [];
+  const choices = document.getElementById('id_values');
+  choices.replaceChildren(...values.map(value => new Option(value, value)));
+  choices.size = Math.min(7, Math.max(2, values.length));
+  document.getElementById('id_breaker_value').replaceChildren(new Option('Choose a value',''), ...values.map(value => new Option(value,value)));
+}
+function updatePattern() {
+  const density = ['density', 'density_low'].includes(mode.value);
+  for (const [name, visible] of [['values',mode.value !== 'every_game'],['threshold',mode.value !== 'every_game'],['window',density],['breaker_value',mode.value === 'breaker']]) {
+    const row = document.querySelector(`[data-field="${name}"]`);
+    row.hidden = !visible;
+    row.querySelectorAll('input,select').forEach(input => input.disabled = !visible);
+  }
+  document.getElementById('id_threshold').min = mode.value === 'density_low' ? 0 : 1;
+}
+series.addEventListener('change', updateValues); mode.addEventListener('change', updatePattern); updatePattern();
+</script>{% endif %}{% endblock %}

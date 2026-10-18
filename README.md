@@ -95,6 +95,117 @@ Signal feedback is the foundation for the later decision/acknowledgement flow.
 The active logger records and displays signals; it does **not** place bets or
 implement the future "bet now" decision protocol.
 
+## Pre-round alerts and Telegram delivery
+
+Open **Alerts** (`/alerts/`) for the complete alert center. Everything is managed
+in the regular application UI; Django admin and terminal commands are optional.
+
+- **Overview:** current patterns, activations, frozen evidence, and worker health.
+- **Rules:** search/filter, create/edit/delete rules, enable/disable them, or add
+  missing defaults. Select values from a list; no JSON or technical keys needed.
+- **Destinations:** manage Telegram chats/channels, subscription levels and
+  expiry, image cards, result follow-ups, and health warnings. Use **Send test
+  message** to explicitly queue a test for that destination.
+- **Telegram & worker:** save/replace/remove the bot token, enable delivery,
+  adjust health/event timing, and start/stop the worker. Changes apply immediately.
+- **Deliveries:** filter the queue/history, view messages and archived cards,
+  cancel pending messages, or retry definitively failed deliveries. Uncertain
+  deliveries cannot be resent from the UI.
+
+The overview refreshes every 15 seconds. Evidence opens as a readable page with
+card preview and JSON export. Management is available locally on `localhost` or
+`127.0.0.1` without an admin login; non-local requests require authenticated staff.
+Mutation endpoints require POST and CSRF protection. Bot tokens are stored in a
+private file (`.local/alerts/bot-token`, mode 0600), never echoed in the UI. The
+local token overrides the environment token, including explicit removal.
+
+Setup from the repository root:
+
+```bash
+.venv/bin/python django_lucky28/manage.py migrate
+.venv/bin/python django_lucky28/manage.py seed_alert_rules
+```
+
+`python3 run.py` applies migrations; `--setup` also seeds defaults. The Rules
+page has an **Add missing defaults** button. Regular restarts preserve deleted
+rules. Seeding installs 79 Lucky28 rules
+without overwriting customizations: streaks, droughts, high/low window density,
+Big/Small and Odd/Even alternation and streak breakers, and 28 individual number
+droughts. The optional every-round rule starts disabled. Number droughts require
+destination rank 2; other defaults require rank 1. Rules use exact values
+such as Big or Odd/Even, with configurable thresholds, windows,
+session scope, and minimum subscription rank (1–5). Semantic changes increment
+the revision so the changed condition can activate independently.
+
+The implementation adapts `ALERT_SYSTEM_ARCHITECTURE_AND_LOGIC.md` to the data
+available here. Racing lineups, car/road/speed rules, three-model prediction
+comparisons, vehicle art, and screenshots have no corresponding Lucky28 inputs.
+Cards therefore show number patterns and a 50-result timeline. The document's
+empirical racing probabilities are not treated as Lucky28 probabilities.
+
+Each fresh pre-result packet freezes one evaluation, all matching occurrences,
+the current rates, up to 1,002 prior results used for patterns, lifetime number
+totals, a 50-result timeline, and six previous results. Only results timestamped
+before that round are eligible. Continuing conditions remain visible but only
+new activations enter the delivery queue (except the explicit every-round rule).
+The engine never recalculates saved evidence after winner arrival or a rule edit.
+Deleting an archived game retains its alert evidence and delivery records.
+
+CSV imports do not generate alerts. Packets older than 120 seconds, timestamps
+more than five seconds in the future, out-of-order pre-rounds, and rounds whose
+winner is already known do not create retrospective pre-round alerts. Only fresh,
+advancing event timestamps reset collection health. Session-scoped rules reset
+on Django server restart; lifetime baselines do not. This launcher uses a single
+Django process; session-scoped rules should use a shared epoch before deploying
+multiple independent web processes.
+
+Telegram is disabled by default. To enable it entirely from the UI:
+
+1. Open **Alerts → Telegram & worker**, paste your BotFather token, check
+   **Enable Telegram delivery**, and save.
+2. Open **Destinations**, add your chat ID or channel username, choose its level,
+   and enable it. Set expiry and follow-up preferences as needed.
+3. Return to **Telegram & worker** and click **Start worker**.
+4. Use **Send test message** on the destination and check **Deliveries**.
+
+No server restart is needed. **Stop worker** lets any in-flight request finish,
+then stops polling. The worker remains separate from the web server. For CLI
+users, the equivalent is:
+
+```bash
+.venv/bin/python django_lucky28/manage.py run_alert_messaging
+```
+
+The worker is intentionally separate from `run.py`. `--once` processes one batch
+and exits. It uses a POSIX file lease (macOS/Linux), atomic conditional database
+claims, a two-second polling interval, and bounded error backoff. Keep the same
+`.local/alerts` directory for workers sharing this database. Telegram calls run
+only in this worker; ingestion never makes Telegram HTTP requests.
+
+Deliveries are filtered by rank and expiry at enqueue time and checked again
+before dispatch. Already completed rounds and stale queued alerts are cancelled.
+Opt-in result follow-ups use their own frozen snapshot and require a confirmed
+original alert. Destination records represent channel or direct-message
+subscriptions; billing, Telegram join approval, invitation creation, and member
+removal are not implemented.
+
+Pillow renders 1080-pixel JPEG cards under 400KB. A two-second render timeout or
+render failure falls back to escaped HTML text. Messages respect Telegram's
+[text and photo caption limits](https://core.telegram.org/bots/api#sendphoto).
+Exact outgoing HTML and any image are archived under `.local/alerts/artifacts/`.
+
+Delivery states are `pending`, `sending`, `sent`, `uncertain`, `failed`, or
+`cancelled`. A rate-limit response explicitly rejecting the request schedules a
+retry. Network errors, server errors, malformed success responses, and abandoned
+claims become **uncertain and are never automatically resent**. This favors
+avoiding duplicates over guaranteed delivery: Telegram provides no idempotency
+key for these send methods. Inspect uncertain records and the target chat
+manually; the UI only offers retries for definitively failed deliveries, never uncertain ones.
+
+After three minutes without fresh events, the worker queues one health warning
+per destination. It re-arms after ingestion resumes. The monitor shows the last
+worker heartbeat, and `/api/alerts/latest/` exposes the latest frozen evaluation.
+
 ## Daily archive
 
 The Django site keeps historical results in `lucky28.db`. Adding another day does

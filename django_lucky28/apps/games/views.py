@@ -7,15 +7,17 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.generics import RetrieveAPIView, ListAPIView
-from .models import GameRound
+from .models import GameRound, NumberGapStat
 from .serializers import GameRoundSerializer
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 from .forms import AnalysisFilterForm, DateRangeForm, DeleteDayForm
 from .services.history import completed_games, daily_summaries, day_context, filter_period
+from .services.alerts import record_live_event
+from django.db import transaction
 
 
 def dashboard_context(request):
@@ -119,6 +121,7 @@ def game_detail(request, game_no):
     return render(request, "games/detail.html", {"game_no": game_no})
 
 @api_view(["POST"])
+@transaction.atomic
 def upsert_pre(request):
     game_no = request.data.get("game_no")
     if not game_no:
@@ -132,7 +135,10 @@ def upsert_pre(request):
             setattr(obj, f, request.data[f])
 
     obj.has_pre = True
+    if not obj.pre_event_ts:
+        obj.pre_event_ts = timezone.now()
     obj.save()
+    record_live_event(obj, 'pre')
 
     return Response(GameRoundSerializer(obj).data, status=201 if created else 200)
 
@@ -151,6 +157,7 @@ def get_winning_color(number):
     return "Unknown"
 
 @api_view(["PATCH"])
+@transaction.atomic
 def update_winner(request, game_no):
     try:
         obj = GameRound.objects.get(game_no=game_no)
@@ -171,7 +178,36 @@ def update_winner(request, game_no):
         obj.winner_color = get_winning_color(obj.winning_number)
 
     obj.has_winner = True
+    if not obj.winner_event_ts:
+        obj.winner_event_ts = timezone.now()
     obj.save()
+    record_live_event(obj, 'winner')
+
+    # Update Gap Stats Live
+    if obj.winning_number is not None:
+        try:
+            # 1. Increment current_gap for ALL numbers by 1
+            NumberGapStat.objects.all().update(current_gap=F('current_gap') + 1)
+            
+            # 2. Process the winning number
+            winner_stat, _ = NumberGapStat.objects.get_or_create(number=obj.winning_number)
+            
+            # actual gap is current_gap - 1 (since we just incremented it)
+            actual_gap = winner_stat.current_gap - 1
+            
+            # Check max gap
+            if actual_gap > winner_stat.max_gap:
+                winner_stat.max_gap = actual_gap
+                
+            winner_stat.total_gap_sum += actual_gap
+            winner_stat.occurrence_count += 1
+            winner_stat.last_seen_game = obj
+            
+            # Reset current_gap to 0 since it just hit
+            winner_stat.current_gap = 0
+            winner_stat.save()
+        except Exception as e:
+            print(f"Error updating Gap Stats: {e}")
 
     # 1. Run Signal Detection (Metrics & Alerts)
     try:
@@ -453,3 +489,32 @@ def import_games(request):
     return render(request, 'games/import_games.html', {
         'history_timezone': timezone.get_current_timezone_name(),
     })
+
+
+def live_gaps_dashboard(request):
+    """
+    Renders the live gaps dashboard HTML page.
+    """
+    return render(request, 'games/live_gaps.html', {
+        'history_timezone': timezone.get_current_timezone_name(),
+    })
+
+
+@api_view(["GET"])
+def api_live_gaps(request):
+    """
+    Returns JSON payload of NumberGapStat for real-time polling.
+    """
+    stats = NumberGapStat.objects.all().order_by('number')
+    data = []
+    for s in stats:
+        data.append({
+            'number': s.number,
+            'current_gap': s.current_gap,
+            'max_gap': s.max_gap,
+            'average_gap': s.average_gap,
+            'color': get_winning_color(s.number),
+            'parity': 'Even' if s.number % 2 == 0 else 'Odd',
+            'size': 'Big' if 14 <= s.number <= 27 else 'Small'
+        })
+    return Response({"stats": data})

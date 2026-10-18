@@ -1,0 +1,2 @@
+{% extends 'games/alerts/layout.html' %}
+{% block alert_content %}<div class="card alert-form"><div class="card-body"><h2>{{ title }}</h2><p class="fs-5">{{ object_name }}</p><p class="text-secondary">{{ explanation }}</p><form method="post" class="alert-toolbar">{% csrf_token %}<button class="btn btn-danger">{{ title }}</button><a class="btn btn-outline-secondary" href="{% url back_url %}">Cancel</a></form></div></div>{% endblock %}

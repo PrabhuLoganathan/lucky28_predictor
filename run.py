@@ -36,7 +36,7 @@ def prepare(check_only):
         venv.EnvBuilder(with_pip=True).create(VENV)
     if Path(sys.prefix).resolve() != VENV.resolve():
         os.execv(str(python), [str(python), str(ROOT / 'run.py'), *sys.argv[1:]])
-    modules = ['django', 'rest_framework', 'pandas', 'twilio', 'dotenv', 'requests']
+    modules = ['django', 'rest_framework', 'pandas', 'twilio', 'dotenv', 'requests', 'PIL']
     if any(importlib.util.find_spec(name) is None for name in modules):
         if check_only:
             raise RuntimeError('Python dependencies are missing. Run python3 run.py --setup.')
@@ -112,6 +112,7 @@ def main():
         return
     run([python, ROOT / 'django_lucky28/manage.py', 'migrate', '--noinput'])
     if args.setup:
+        run([python, ROOT / 'django_lucky28/manage.py', 'seed_alert_rules'])
         print('Setup complete. Start both services with: python3 run.py')
         return
     django = logger = None

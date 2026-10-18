@@ -102,11 +102,12 @@ def resolve_timestamps(rows, date_prefix):
         previous = timestamps[i - 1]
         timestamp = parse_timestamp(rows[i]['time'], previous.date())
         if timestamp > previous:
-            if '.' in rows[i]['time']:
-                reference_date = previous.date().replace(year=previous.year - 1, day=1)
-                timestamp = parse_timestamp(rows[i]['time'], reference_date)
-            else:
-                timestamp -= timedelta(days=1)
+            if (timestamp - previous) > timedelta(hours=12):
+                if '.' in rows[i]['time']:
+                    reference_date = previous.date().replace(year=previous.year - 1, day=1)
+                    timestamp = parse_timestamp(rows[i]['time'], reference_date)
+                else:
+                    timestamp -= timedelta(days=1)
         timestamps[i] = timestamp
     return timestamps
 

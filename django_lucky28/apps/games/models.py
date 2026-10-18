@@ -1,4 +1,5 @@
 from django.db import models
+from .alert_models import (AlertRule, AlertDestination, AlertEvaluation, AlertOccurrence, AlertDelivery, AlertRuntime, AlertSettings)
 
 class GameRound(models.Model):
     game_no = models.CharField(max_length=32, unique=True, db_index=True)
@@ -77,3 +78,19 @@ class SignalLog(models.Model):
     def __str__(self):
         return f"{self.rule.name} @ Game {self.game.game_no}"
 
+class NumberGapStat(models.Model):
+    number = models.IntegerField(unique=True, primary_key=True)
+    current_gap = models.IntegerField(default=0)
+    max_gap = models.IntegerField(default=0)
+    total_gap_sum = models.BigIntegerField(default=0)
+    occurrence_count = models.IntegerField(default=0)
+    last_seen_game = models.ForeignKey('GameRound', on_delete=models.SET_NULL, null=True, blank=True)
+
+    @property
+    def average_gap(self):
+        if self.occurrence_count == 0:
+            return 0
+        return round(self.total_gap_sum / self.occurrence_count, 1)
+
+    def __str__(self):
+        return f"Number {self.number}: Max {self.max_gap}, Avg {self.average_gap}"

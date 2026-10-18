@@ -17,6 +17,7 @@ from .models import GameRound, SignalLog
 from .serializers import GameRoundSerializer
 from .services.analysis import AnalysisService
 from .services.signals import SignalAnalyzer
+from .services.alerts import record_live_event
 
 
 class LoggerPermission(BasePermission):
@@ -126,6 +127,8 @@ def events(request):
                 game.reward_type = f'{game.size_label}/{game.parity_label}'
                 game.save()
                 SignalAnalyzer(notify=False).analyze_game(game)
+        if not duplicate:
+            record_live_event(game, event['phase'])
         signals = list(SignalLog.objects.filter(game=game).order_by('id').values(
             'id', 'rule__name', 'rule__dimension', 'rule__target_value', 'rule__severity', 'value',
         )) if event['phase'] == 'winner' else []

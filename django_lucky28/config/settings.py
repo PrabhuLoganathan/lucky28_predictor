@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timezone as datetime_timezone
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BASE_DIR.parent
@@ -72,3 +73,12 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Alerts are evaluated locally; outbound delivery is an explicit opt-in.
+SERVER_SESSION_STARTED_AT = datetime.now(datetime_timezone.utc)
+ALERT_TELEGRAM_ENABLED = os.environ.get('ALERT_TELEGRAM_ENABLED', '').lower() == 'true'
+ALERT_TELEGRAM_BOT_TOKEN = os.environ.get('ALERT_TELEGRAM_BOT_TOKEN', '')
+ALERT_STATE_DIR = Path(os.environ.get('ALERT_STATE_DIR', str(PROJECT_ROOT / '.local' / 'alerts')))
+ALERT_MAX_EVENT_AGE_SECONDS = 120
+ALERT_HISTORY_LIMIT = 1002
+ALERT_COLLECTION_TIMEOUT_MINUTES = 3

@@ -123,7 +123,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container">
             <a class="navbar-brand text-white" href="/">
-                <span class="text-primary">Lucky</span>28 Admin
+                <span class="text-primary">Lucky</span>28
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -132,6 +132,9 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="/">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.url_name == 'alerts_dashboard' %} active{% endif %}" href="{% url 'alerts_dashboard' %}">Alerts</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'daily_archive' %}">Daily archive</a>
@@ -146,11 +149,15 @@
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="signalsDropdown">
                             <li><a class="dropdown-item" href="{% url 'signals_dashboard' %}">Monitor (Live)</a></li>
+                            <li><a class="dropdown-item" href="{% url 'alerts_dashboard' %}">Round alerts</a></li>
                             <li><a class="dropdown-item" href="{% url 'signals_config' %}">Configuration</a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'pro_dashboard' %}">Pro Analysis</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'live_gaps_dashboard' %}">Live Gaps</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link text-warning" href="{% url 'import_games' %}">Import</a>

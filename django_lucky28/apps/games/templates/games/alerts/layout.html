@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Alert center · Lucky28{% endblock %}
+{% block content %}
+<style>
+.alert-nav{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.5rem 0}.alert-nav a{padding:.65rem 1rem;border:1px solid var(--border-color);border-radius:10px;text-decoration:none;color:#b9c5db}.alert-nav a.active{color:white;background:#30245a;border-color:#8965dc}.alert-toolbar{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}.alert-toolbar form{margin:0}.alert-form{max-width:850px}.alert-form .errorlist{color:#ff9dad;list-style:none;padding-left:0;margin-top:.4rem}.alert-form select option{background:#191928;color:#fff}.alert-form .form-text{color:#aab3c8}.alert-table{min-width:760px}.alert-table td:first-child{min-width:180px}.alert-table td,.alert-table th{padding:1rem;vertical-align:middle}.alert-table .btn{white-space:nowrap}.alert-status{border:1px solid #4c5468;padding:.25rem .55rem;border-radius:6px;font-size:.8rem}.alert-empty{padding:3rem;text-align:center;color:#aab3c8}.alert-detail dt{color:#aab3c8;font-weight:400}.alert-detail dd{overflow-wrap:anywhere}.alert-note{border-left:3px solid #8c6cd6;padding:1rem;background:#171524;border-radius:8px}.alert-page-title{font-size:1.7rem;margin:0}pre.alert-payload{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;color:#ced7e8}.alert-badge-on{color:#80e5bc}.alert-badge-off{color:#b3bed2}
+</style>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div><h1 class="mb-1">Alert center</h1><p class="text-secondary mb-0">Configure patterns, choose recipients, and track delivery.</p></div><a class="btn btn-outline-secondary" href="/">Game dashboard</a></div>
+<nav class="alert-nav" aria-label="Alert center">
+<a href="{% url 'alerts_dashboard' %}" class="{% if alert_tab == 'overview' %}active{% endif %}">Overview</a>
+<a href="{% url 'alert_rules' %}" class="{% if alert_tab == 'rules' %}active{% endif %}">Rules</a>
+<a href="{% url 'alert_destinations' %}" class="{% if alert_tab == 'destinations' %}active{% endif %}">Destinations</a>
+<a href="{% url 'alert_settings' %}" class="{% if alert_tab == 'settings' %}active{% endif %}">Telegram &amp; worker</a>
+<a href="{% url 'alert_deliveries' %}" class="{% if alert_tab == 'deliveries' %}active{% endif %}">Deliveries</a>
+</nav>
+{% for message in messages %}<div role="status" class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}">{{ message }}</div>{% endfor %}
+{% block alert_content %}{% endblock %}
+{% endblock %}
