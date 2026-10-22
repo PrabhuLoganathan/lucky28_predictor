@@ -206,6 +206,292 @@ After three minutes without fresh events, the worker queues one health warning
 per destination. It re-arms after ingestion resumes. The monitor shows the last
 worker heartbeat, and `/api/alerts/latest/` exposes the latest frozen evaluation.
 
+## Color group absence alerts
+
+Open **Alerts → Group absence** (`/alerts/groups/`) and select **Edit thresholds**.
+The seven groups use the requirements document's exact membership: Red
+(0, 1, 26, 27), Orange (2, 3, 24, 25), Magenta (4, 5, 22, 23), Blue
+(6, 7, 20, 21), Cyan / Teal (8, 9, 18, 19), Green (10, 11, 16, 17), and
+Grey (12, 13, 14, 15). Stable IDs G01–G07 and their membership live in
+`games/group_config.py`. Existing Yellow/Pink rules keep their original labels.
+
+New group alerts start **disabled, with no thresholds**. Enter your own positive
+whole-round thresholds (maximum **1,000,000**), enable the desired groups and global
+delivery, and select **Save settings**. Apply to all only populates editable fields;
+Cancel discards edits. Saves are atomic and record old/new values, editor and time.
+Local access records “Local operator”; authenticated staff records their username.
+The screen shows the latest 50 changes; the full audit remains in the database.
+No restart or daily reset is needed. Dates use Django's configured `TIME_ZONE`.
+
+A hit resets a group to zero; each other valid completed round adds one. Counts
+and notification markers survive restarts, threshold edits, disabling and midnight.
+An unseen group explicitly shows an unknown last appearance and a lower-bound
+count. Each current absence produces one durable event, with one delivery per
+eligible destination. Reaching the threshold while delivery is paused records no
+new event until re-enabled. Raising the threshold retains notification history.
+The regular Telegram destinations and worker deliver these messages as text.
+Optionally set `ALERT_PUBLIC_BASE_URL` to the app's externally reachable HTTP(S)
+origin to include clickable round-detail links; otherwise messages show the local
+in-app details path. The dashboard always links directly to the round.
+
+The feed is expected to have consecutive round IDs, as confirmed for this feature.
+Numeric IDs, or IDs with a shared prefix followed by integers (e.g. R100, R101),
+are ordered numerically. IDs establish continuity only; absence counts count
+observed rounds, never ID differences. Known gaps, invalid winners, missing
+completion timestamps, cancelled results and unfinished rounds preceding a later
+winner pause the entire affected stream. The open next round is allowed.
+Incompatible historical ID formats also pause delivery because continuity cannot
+be established. Historical imports with synthetic IDs must be reconciled with
+source round IDs before these alerts can deliver. No results are automatically
+deleted or fabricated to repair gaps. The application groups legacy blank game
+names with Lucky28, matching its existing history behavior.
+
+Live ingestion updates counters and the outbox transactionally. Imports, admin
+corrections and deletions invalidate the persisted counters; the next dashboard
+read, worker cycle or live result rebuilds ordered history. Rebuilds evaluate only
+the latest state and preserve notification evidence; they never replay historical
+threshold crossings. `python3 run.py` restores counters after migration. A manually
+started server restores them on first use; an explicit catch-up is also available:
+
+```bash
+.venv/bin/python django_lucky28/manage.py sync_group_absence
+```
+
+Group alerts have a separate event history and use the existing durable delivery
+queue. Before dispatch, unsent messages refresh their count, threshold and last
+appearance from reconciled state while retaining the same delivery key and original
+event history. Paused/incomplete/below-threshold events remain pending, and an appearance
+cancels unsent obsolete deliveries while retaining history. Rate limits and local
+archive failures retry the same event/delivery key. Definitively rejected Telegram
+requests remain available for the existing manual Retry action. Network failures,
+server errors and abandoned in-flight claims are **uncertain**, never automatically
+resent: Telegram does not support send-message idempotency, so an ambiguous retry
+could duplicate a notification. No worker or real notifications are enabled by
+installing this feature.
+
+Acceptance coverage is in `games.tests.test_group_absence` (AC01–AC15), with existing
+alert tests covering AC16. `scripts/check_alert_ui.py` also checks browser validation,
+Apply to all, explicit save, persistence, Cancel, group history, and desktop/mobile
+screens against an isolated database.
+
+## Recent 10-game drought and repeat alerts
+
+Open **Alerts → Recent 10 games** (`/alerts/windows/`), or **Configure 10-game
+alerts** beside the analysis table. Each new completed result advances a rolling
+window of exactly ten results, across midnight and service restarts.
+
+- **Drought:** all ten results are different. For example,
+  `0, 2, 4, 6, 8, 10, 12, 14, 16, 18`. Send one alert when this condition starts;
+  continuing all-different windows do not resend. A window containing a repeat
+  allows the next all-different period to alert again.
+- **Repeat:** the newest result matches one of the previous nine. If the next
+  result in that example is `8`, the new window is
+  `2, 4, 6, 8, 10, 12, 14, 16, 18, 8`, triggering one repeat alert for that round.
+  An earlier pair remaining in the window does not alert again when the newest
+  result is different. A match ten rounds back has already left the window.
+
+The two switches start disabled and are saved explicitly. Enabling evaluates the
+current window once. Counts, settings and event keys persist; refreshing, repeating
+an event, saving again or restarting does not duplicate notifications. Startup and
+late corrections do not replay old windows. A separate history records the ten
+numbers, round range, type and repeated-number counts. The analysis table uses the
+same repetition calculation and labels all-different windows as droughts.
+
+These alerts require ten consecutive valid completed rounds in their own stream.
+Pending, invalid or missing rounds inside that window pause evaluation; historical
+gaps outside it do not prevent a new complete window from working. The current
+round is selected by result timestamp, then consecutive round IDs establish its
+window. Corrected or deleted evidence cancels affected unsent messages. Messages
+use the existing Telegram destinations, worker and retry/uncertain-delivery policy.
+They expire using the Telegram worker's configured maximum event age (120 seconds
+by default), and contain the observed window rather than a prediction.
+
+`python3 run.py` migrates and restores this feature automatically. For a manually
+started server, run migrations first; state restores on the first page request,
+result or worker cycle. `sync_window_alerts` explicitly restores current state.
+Tests are in `games.tests.test_window_alerts`, with browser coverage in
+`scripts/check_alert_ui.py`.
+
+## Row, column and SE/BE/BO/SO alerts
+
+Open **Alerts → Rows & categories** (`/alerts/categories/`) and choose **Edit
+category thresholds**. Each of the 15 groups has separate absence and streak
+switches and thresholds, plus a global delivery switch. Bulk controls can fill
+thresholds or enable/disable either alert type before saving. Cancel discards
+unsaved edits. Saved changes are audited.
+
+| Family | Groups |
+| --- | --- |
+| Rows | Row 1: 0–6; Row 2: 7–13; Row 3: 14–20; Row 4: 21–27 |
+| Columns | C1: 0,7,14,21; C2: 1,8,15,22; C3: 2,9,16,23; C4: 3,10,17,24; C5: 4,11,18,25; C6: 5,12,19,26; C7: 6,13,20,27 |
+| Combinations | SE: 0,2,4,6,8,10,12; BE: 14,16,18,20,22,24,26; BO: 15,17,19,21,23,25,27; SO: 1,3,5,7,9,11,13 |
+
+At threshold **3**, absence alerts after three completed results outside a group.
+Any member resets its absence to zero. A streak alerts after three consecutive
+results inside a group, including different member numbers: `14 → 19 → 20` is a
+Row 3 streak. A result outside the group resets its streak to zero. Each period
+alerts once; continuing counts, duplicate packets, threshold edits, toggles and
+restarts do not send it again. A new absence or streak can alert again. Counts
+continue across midnight and while delivery is disabled.
+
+**Condition-change follow-ups** are enabled by default for these 15 groups and
+can be switched off separately in category settings. After a recipient receives
+an absence or streak alert, send one follow-up when that period ends. It shows
+the group numbers in brackets, the first result that ended the condition, its
+round and the final count. For example, a Row 3 absence ends when `18` appears;
+a Row 3 streak ends when `21` appears. Increasing counts do not send follow-ups.
+New qualifying groups still generate their normal threshold alerts independently.
+
+Follow-ups use the same destination, card preference and durable retry rules.
+Only confirmed recipients of the original alert receive them. Missing evidence
+pauses the follow-up, and corrections cancel an invalid queued ending. A later
+verified ending can restore that unsent follow-up using the same delivery key.
+Already sent or uncertain messages are never resent. Existing periods resolved
+before this feature was installed are not replayed. The original alert and ending
+evidence remain visible together in category history.
+
+New streams start disabled with unset thresholds until explicitly configured.
+Each setting accepts whole numbers from 1 to 1,000,000; enabled rules require a
+threshold. Saving evaluates the current period without replaying ended periods.
+The requested local setup uses **3 for both modes, with all 30 rules enabled**.
+
+Only consecutive valid completed results count. Missing, invalid or pending rounds
+inside the current history pause rules whose period boundary cannot be verified.
+A known group hit establishes its absence boundary; a known result outside the
+group establishes its next streak boundary. Thus older gaps do not permanently
+block every group. Unseen groups in uninterrupted available history show an
+“at least” absence count. Missing or invalid latest results pause delivery.
+
+Telegram cards and text include the group name and all member numbers in brackets,
+the observed count, threshold and evaluated round. They use existing destinations
+and delivery controls. Queued alerts are checked again before sending, refreshed
+to the current count, and cancelled when their period ends. Rate-limit retries
+keep the same delivery key; uncertain sends are not automatically retried.
+
+`python3 run.py` migrates and restores these rules. Manually managed installations
+must migrate and restart the web and alert worker processes. The command
+`sync_category_alerts` restores current state. Tests are in
+`games.tests.test_category_alerts`; `scripts/check_alert_ui.py` checks browser
+validation, bulk controls, save/cancel persistence and desktop/mobile layouts.
+SQLite atomic transactions reserve writes before reading state, allowing the
+worker and dashboard tabs to reconcile counts without read-to-write lock conflicts.
+
+## Global 150-game alert timeline
+
+Telegram image cards use the same Number Game classifications and include a
+frozen global timeline of up to 150 games, with the latest 15 results enlarged.
+The timeline highlights the relevant group's appearances or the alert's outcome
+track. A flame identifies streaks, an hourglass identifies absences, circular
+arrows identify repeats, and a check identifies ended conditions. Large counts,
+colored number chips, and a symbol legend keep the card readable at a glance.
+Group-absence and 10-game alerts now also use images when the destination's
+**Use cards** setting is enabled; rendering failures retain the text fallback.
+Snapshots are captured at the corresponding evidence round, never fetched by the
+image renderer. Older queued messages use only the history already saved with
+them. Existing eligibility, correction checks, and delivery deduplication still
+apply. Run `python scripts/preview_alert_cards.py` for fictional local previews
+in `.local/telegram-card-previews/`; this sends no Telegram messages.
+
+Open **Alerts → Global timeline** (`/alerts/timeline/`) or the live timeline at the
+top of **Pro Analysis** (`/analysis/`). It spans the latest 150 valid completed
+games across dates, independently of the analysis date filters. Results are
+ordered by numeric round sequence when available (otherwise completion time),
+newest first, in six pages of 25 aligned columns.
+
+The **Live number palette** fixes numbers 0–27 in four rows of seven. Selection,
+recent appearances, filter matching and inspection are independent states. On a
+fresh page, **Auto last 10** checks the distinct numbers in the latest ten
+completed results. Repeats contribute multiple hits, but one selected tile.
+Click the number body to inspect it (gold border); use its checkbox to select it.
+**RECENT**, hit counts and **Latest** remain visible regardless of filtering.
+
+A checkbox change enters **Manual** mode. **Unselect last 10** removes recent
+numbers from the selection and preserves selected absent numbers. **Select absent
+numbers** selects exactly the complement of the recent set; **Clear selection**
+selects nothing. Manual selection survives polling, corrections and stream
+switches in the open page. **Restore last 10** replaces it with the recent set and
+resumes Auto mode. A full browser reload starts Auto again. Separate counts show
+selected numbers, recent distinct numbers and filter matches.
+
+Filters apply to **all 28 numbers**, including absent and unselected tiles.
+S/B/E/O/SE/SO/BE/BO toggle independently. The funnel panel adds independent color,
+row, column, range and single/repeated-hit filters; removable chips show active
+conditions. **Any match** is the default; **All active filters** qualifies only
+the intersection. A number matching one filter takes its stable accent. Multiple
+matches use colored background bands, up to three labeled strips, an **×N**
+count and **+N more** when needed. Tap or focus the badge for the complete list.
+Partial matches retain their strips in All mode. These counts describe matching
+conditions, not prediction confidence. **All** and **Clear filters** clear only
+filters. Filter choices persist across reloads; number selection does not.
+
+**Gaps and current streaks** use full saved history independently of filters and
+selection. Column gaps sit above the board, row gaps to its left, row streaks to
+its right and column streaks below. Each top category filter has Streak above and
+Gap below. Any member appearing resets its group's gap to zero; streaks count the
+consecutive matching suffix ending at the latest completed result. Every tied
+positive maximum gap is red, and every tied positive maximum streak is green,
+compared separately within rows, columns and the eight filters. Other metric
+values stay neutral. Labels say **MAX observed** when any compared count is
+uncertain; all-zero sets have no emphasis. Click a metric to inspect the group.
+**Apply palette filter** adds that group without removing other filters.
+
+On narrow screens, the board scrolls horizontally as one unit, keeping readable
+numbers and 44 px targets. A compact summary exposes all row/column gaps and
+streaks together. The inspection panel moves below the board when space is limited.
+
+The separate **Gap analytics** panel has Rows, Columns, Size, Parity, Combos,
+Colors, and Range tabs. Current counts sit next to labels, before the bars;
+**Largest gap first** is the default sort, with Smallest and Natural alternatives.
+Ties retain natural group order. Sorting and keyboard focus survive live updates.
+Bars share a linear scale. **Gap history** shows a pale ongoing gap followed by
+up to 30 solid completed gaps, newest first, linked to ending results.
+
+`+` means no earlier appearance is available for a gap, or a streak reaches the
+start of saved history. `*` marks missing/unverified boundaries (including daily
+rollovers not verified by round IDs). Streaks stop at that boundary; gaps report
+observed counts. Incomplete completed-gap intervals are excluded from group
+averages/maxima. A known newer finished round without a valid result makes current
+streaks **N/A**; an ordinary active pending round does not. Failed refreshes keep
+the last snapshot and manual selections, with explicit stale status. Corrections
+and imports recalculate all views from one ordered, deduplicated history.
+
+The palette, timeline, and Live Gaps now derive from the same authoritative saved
+completed rounds, so corrections, late packets, and imports rebuild their values.
+Round IDs identify unique records; equal numbers in different rounds remain
+separate appearances. Gap statistics cover all saved completed results for the
+selected stream and count observed games only. A `+` indicates a number not seen
+in available history; average/longest completed gaps require two appearances.
+Historical gap counters in `NumberGapStat` are no longer used by `/api/gaps/`.
+
+Tracks cover numbers, size, parity, combinations, all seven color groups, board
+rows and columns, extremes, repeats against the previous two games, rolling
+10-game repeat/drought windows, and saved alert events (including category endings
+and legacy signals). Select a dot for the full game ID, time, classifications,
+and evidence links. Pattern observations describe streaks, absences,
+concentration and alternation; they do not predict future results.
+
+The timeline checks for results and corrections every five seconds while the tab
+is visible. Pause/resume and manual refresh are available. Track visibility and
+collapse preferences persist in this browser. Disabled tracks are omitted from
+the feed. Each track's **Reset** hides history through the latest completed game
+for the current session and stream; **Restore history** reverses it. These actions
+do not erase games, reset alert counters, or send notifications.
+
+**Refresh now** fetches results within the open page. After a UI update, use the
+browser's Reload button (Cmd+R on macOS). Timeline CSS/JavaScript URLs include
+their content hashes, and both timeline pages disable HTML caching, so a normal
+reload fetches the changed interface without manually clearing browser caches.
+
+Gaps break pattern calculations; incomplete repeat windows show `?`. No AI
+accuracy track is shown because this app does not store pre-game AI predictions
+that can be scored reliably. The API is `GET /api/trackers/live/` with optional
+`stream` and comma-separated `tracks`; session reset/restore uses CSRF-protected
+`POST /api/trackers/<key>/reset/` with `action=reset` or `action=restore`.
+
+Verify with `python django_lucky28/manage.py test games.tests.test_timeline` and
+`python scripts/check_timeline_ui.py` (Chrome and the logger's Playwright package
+must be installed). The browser check uses a temporary database.
+
 ## Daily archive
 
 The Django site keeps historical results in `lucky28.db`. Adding another day does

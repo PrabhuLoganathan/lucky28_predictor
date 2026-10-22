@@ -1,11 +1,71 @@
 """Render only frozen payloads; no live database reads during delivery."""
 from html import escape
-from io import BytesIO
-from textwrap import wrap
-import time
+from games.group_config import label_color_groups
+
+
+def match_labels(match):
+    """Also label previously queued evidence without changing the saved payload."""
+    title, detail = match['title'], match['detail']
+    if match.get('group') == 'color':
+        return label_color_groups(title), label_color_groups(detail)
+    return title, detail
+
+
+def card_lines(text, font, width):
+    """Wrap measured words; split long tokens with bounded binary searches."""
+    lines, line = [], ''
+    for word in text.split():
+        candidate = f'{line} {word}' if line else word
+        if font.getlength(candidate) <= width:
+            line = candidate
+            continue
+        if line:
+            lines.append(line)
+            line = ''
+        while word and font.getlength(word) > width:
+            low, high = 1, len(word)
+            while low < high:
+                middle = (low + high + 1) // 2
+                if font.getlength(word[:middle]) <= width:
+                    low = middle
+                else:
+                    high = middle - 1
+            lines.append(word[:low])
+            word = word[low:]
+        line = word
+    if line:
+        lines.append(line)
+    return lines
 
 
 def format_message(payload, kind='alert', limit=4096):
+    """Symbol-first text, with whole HTML lines within Telegram's UTF-16 budget."""
+    from .alert_card import symbol_for
+    message = symbol_for(payload, kind) + ' ' + _format_message(payload, kind, limit)
+    games = payload.get('global_timeline', {}).get('games', [])
+    if games:
+        lines = message.split('\n')
+        lines.insert(2, f'🧭 Timeline snapshot: {len(games)} / 150 games · newest first')
+        message = '\n'.join(lines)
+    length = lambda value: len(value.encode('utf-16-le')) // 2
+    if length(message) <= limit:
+        return message
+    result = []
+    footer = '… Full details in saved evidence.'
+    for line in message.split('\n'):
+        if length('\n'.join(result + [line, footer])) > limit:
+            break
+        result.append(line)
+    return '\n'.join(result + [footer])
+
+
+def _format_message(payload, kind='alert', limit=4096):
+    if kind in ('category', 'category_end'):
+        return format_category_message(payload)
+    if kind == 'window':
+        return format_window_message(payload)
+    if kind == 'group':
+        return format_group_message(payload)
     heading = {'alert': 'LUCKY28 ALERT', 'result': 'CONFIRMED RESULT', 'health': 'COLLECTION WARNING', 'test': 'LUCKY28 TEST MESSAGE'}[kind]
     lines = [f'<b>{heading}</b>', f'Round: {escape(str(payload["game_no"])[:100])}',
              escape(str(payload.get('captured_at', ''))[:100])]
@@ -17,7 +77,8 @@ def format_message(payload, kind='alert', limit=4096):
     matches = payload.get('matches', [])
     # Keep complete HTML blocks and reserve space for the omitted count/footer.
     for index, match in enumerate(matches):
-        block = f'<b>{escape(match["title"][:120])}</b>\n{escape(match["detail"][:300])}'
+        title, detail = match_labels(match)
+        block = f'<b>{escape(title)}</b>\n{escape(detail)}'
         if len(('\n'.join(lines + [block])).encode('utf-16-le')) // 2 > limit - 150:
             lines.append(f'… {len(matches) - index} more conditions in the saved evidence.')
             break
@@ -28,61 +89,89 @@ def format_message(payload, kind='alert', limit=4096):
 
 
 def render_card(payload, kind='alert', budget=2.0):
-    """1080px JPEG under 400KB, with a cooperative rendering deadline."""
-    from PIL import Image, ImageDraw, ImageFont
-    deadline = time.monotonic() + budget
+    from .alert_card import render_card as create_card
+    return create_card(payload, kind, budget)
 
-    def check():
-        if time.monotonic() >= deadline:
-            raise TimeoutError('Card render deadline exceeded')
 
-    def font(size):
-        for path in ('DejaVuSans.ttf', '/System/Library/Fonts/Supplemental/Arial.ttf'):
-            try:
-                return ImageFont.truetype(path, size)
-            except OSError:
-                pass
-        return ImageFont.load_default(size=size)
-
-    matches = payload.get('matches', [])[:8]
-    height = 510 + len(matches) * 118
-    canvas = Image.new('RGB', (1080, height), '#0C192C')
-    draw = ImageDraw.Draw(canvas)
-    title_font, body_font, small_font = font(38), font(25), font(20)
-    draw.rectangle((0, 0, 1080, 7), fill='#5EE0C2')
-    draw.text((40, 32), {'alert': 'LUCKY28 · ROUND ALERT', 'result': 'CONFIRMED RESULT',
-                         'health': 'COLLECTION WARNING'}[kind], font=title_font, fill='#F5F8FF')
-    draw.text((40, 88), str(payload['game_no'])[:40], font=body_font, fill='#68B5FF')
-    draw.text((40, 128), str(payload.get('captured_at', ''))[:45], font=small_font, fill='#AAB8CC')
-    y = 180
-    colors = {'size': '#F7BC62', 'parity': '#68B5FF', 'color': '#BAA0FF', 'number': '#66D8D2'}
-    for match in matches:
-        check()
-        draw.rounded_rectangle((30, y, 1050, y + 105), radius=12, fill='#16273D')
-        draw.rectangle((30, y + 12, 36, y + 93), fill=colors.get(match['group'], '#5EE0C2'))
-        draw.text((52, y + 10), match['title'][:60], font=body_font, fill='#F5F8FF')
-        for line, text in enumerate(wrap(match['detail'], width=82)[:2]):
-            draw.text((52, y + 48 + line * 24), text, font=small_font, fill='#C4CFDF')
-        y += 118
-    if kind == 'result':
-        result = payload['result']
-        draw.text((40, y), f'{result["number"]} · {result["size"]} · {result["parity"]} · {result["color"]}', font=title_font, fill='#5EE0C2')
-    elif kind == 'health':
-        draw.text((40, y), payload.get('detail', '')[:70], font=body_font, fill='#FF8D9B')
+def format_category_message(payload):
+    if payload.get('change_type') == 'ended':
+        return format_category_ending(payload)
+    count = f'{"at least " if payload["lower_bound"] else ""}{payload["count"]}'
+    detail = (f'Absent for {count} completed rounds.' if payload['mode'] == 'absence'
+              else f'Appeared in {count} consecutive completed rounds.')
+    lines = [f'<b>GROUP {payload["mode"].upper()} ALERT</b>',
+             escape(f'{payload["group_name"]} {payload["numbers"]}'),
+             escape(f'{detail} Threshold: {payload["threshold"]}.'),
+             escape(f'Stream: {payload["stream"]}')]
+    if payload.get('last_round'):
+        lines.append(escape(f'Last appearance: {payload["last_number"]} in round {payload["last_round"]}.'))
     else:
-        draw.text((40, y), 'Recent results · newest first', font=small_font, fill='#AAB8CC')
-        for index, result in enumerate(payload.get('timeline', [])[:50]):
-            x, row_y = 55 + (index % 20) * 50, y + 60 + (index // 20) * 50
-            draw.ellipse((x - 20, row_y - 20, x + 20, row_y + 20), fill='#245849' if result['size'] == 'Big' else '#3C3B68')
-            draw.text((x, row_y), str(result['number']), font=small_font, anchor='mm', fill='white')
-    if len(payload.get('matches', [])) > len(matches):
-        draw.text((40, height - 100), f'{len(matches)} of {len(payload["matches"])} conditions shown · full evidence in dashboard', font=small_font, fill='#AAB8CC')
-    draw.text((40, height - 70), 'Frozen evidence · Observed history, not a prediction', font=small_font, fill='#AAB8CC')
-    for quality in (85, 75, 65, 55):
-        check()
-        output = BytesIO()
-        canvas.save(output, format='JPEG', quality=quality, optimize=True)
-        check()
-        if output.tell() < 400_000:
-            return output.getvalue()
-    raise ValueError('Card exceeded 400KB')
+        lines.append('Last appearance: Not seen in available history.')
+    if payload['mode'] == 'streak':
+        lines.append(escape(f'Streak starts at round {payload["period_start"]}.'))
+    lines.extend([escape(f'Evaluated through round {payload["evaluated_round"]}.'),
+                  escape(f'Alert time: {payload["captured_at"]}')])
+    if payload.get('details_url'):
+        lines.append(f'<a href="{escape(payload["details_url"], quote=True)}">Round details</a>')
+    else:
+        lines.append(escape(f'Details in app: {payload["details_path"]}'))
+    lines.append('<i>Observed results; not a prediction of the next result.</i>')
+    return '\n'.join(lines)
+
+
+def format_category_ending(payload):
+    count = f'{"at least " if payload["lower_bound"] else ""}{payload["count"]}'
+    detail = (f'Absence ended after {count} missed rounds. Result {payload["ended_number"]} belongs to this group.'
+              if payload['mode'] == 'absence' else
+              f'Streak ended after {count} consecutive hits. Result {payload["ended_number"]} is outside this group.')
+    lines = [f'<b>GROUP {payload["mode"].upper()} ENDED</b>',
+             escape(f'{payload["group_name"]} {payload["numbers"]}'), escape(detail),
+             escape(f'Ending round: {payload["evaluated_round"]}.'),
+             escape(f'Result time: {payload["ended_at"]}'), escape(f'Stream: {payload["stream"]}')]
+    if payload.get('details_url'):
+        lines.append(f'<a href="{escape(payload["details_url"], quote=True)}">Round details</a>')
+    else:
+        lines.append(escape(f'Details in app: {payload["details_path"]}'))
+    lines.append('<i>Observed results; not a prediction of the next result.</i>')
+    return '\n'.join(lines)
+
+
+def format_group_message(payload):
+    group = f'{payload["group_id"]} · {payload["color"]} group {payload["numbers"]}'
+    count = f'{"at least " if payload["lower_bound"] else ""}{payload["absence"]}'
+    lines = ['<b>GROUP ABSENCE ALERT</b>', escape(group),
+             escape(f'Absent for {count} observed completed rounds. Threshold: {payload["threshold"]}.'),
+             escape(f'Stream: {payload["stream"]}')]
+    if payload['lower_bound']:
+        lines.append('Last appearance: Not seen in available history.')
+    else:
+        lines.append(escape(f'Last appearance: {payload["last_number"]} in round {payload["last_round"]} at {payload["last_timestamp"]}.'))
+    lines.extend([escape(f'Evaluated through round {payload["evaluated_round"]}.'),
+                  escape(f'Alert time: {payload["captured_at"]}')])
+    if payload.get('details_url'):
+        lines.append(f'<a href="{escape(payload["details_url"], quote=True)}">Round details</a>')
+    else:
+        lines.append(escape(f'Details in app: {payload["details_path"]}'))
+    lines.append('<i>Observed absence; not a prediction of the next result.</i>')
+    return '\n'.join(lines)
+
+
+def format_window_message(payload):
+    title = '10-GAME DROUGHT — ALL DIFFERENT' if payload['kind'] == 'drought' else '10-GAME REPEAT'
+    lines = [f'<b>{title}</b>', escape(f'Stream: {payload["stream"]}'),
+             escape(f'Rounds: {payload["start_round"]} – {payload["end_round"]}'),
+             escape('Results (oldest → newest): ' + ', '.join(map(str, payload['numbers'])))]
+    if payload['kind'] == 'drought':
+        lines.append('All 10 completed results are different. No number repeats.')
+    else:
+        newest = payload['numbers'][-1]
+        count = payload['numbers'].count(newest)
+        lines.append(escape(f'Newest result {newest} appears {count} times within the latest 10 games.'))
+        lines.append(escape(f'Repeated numbers: {payload["repeated_details"]}'))
+    lines.append(escape(f'Alert time: {payload["captured_at"]}'))
+    if payload.get('details_url'):
+        lines.append(f'<a href="{escape(payload["details_url"], quote=True)}">Round details</a>')
+    else:
+        lines.append(escape(f'Details in app: {payload["details_path"]}'))
+    lines.append('<i>Observed results; not a prediction of the next result.</i>')
+    return '\n'.join(lines)

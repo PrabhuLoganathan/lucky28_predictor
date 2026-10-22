@@ -53,6 +53,12 @@ class Command(BaseCommand):
                         close_old_connections()
                         if AlertRuntime.objects.filter(pk=1, stop_requested=True).exists():
                             break
+                        from games.services.group_absence import synchronize_all
+                        synchronize_all()
+                        from games.services.window_alerts import synchronize_all as synchronize_windows
+                        synchronize_windows()
+                        from games.services.category_alerts import synchronize_all as synchronize_categories
+                        synchronize_categories()
                         check_collection_health()
                         deliver_pending(limit=3)
                         failures = 0

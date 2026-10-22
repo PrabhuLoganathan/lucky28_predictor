@@ -1,5 +1,6 @@
 """Pure, newest-first rule evaluation. Missing facts break streaks and windows."""
 from itertools import takewhile
+from games.group_config import label_color_groups
 
 
 def evaluate_rules(rules, facts, prior_active=()):
@@ -43,8 +44,10 @@ def evaluate_rules(rules, facts, prior_active=()):
         if matched:
             identity = f'{rule.key}:{rule.revision}:global'
             matches.append(dict(identity=identity, rule_key=rule.key, revision=rule.revision,
-                                title=rule.title, group=rule.series, mode=mode, observed=count,
-                                threshold=rule.threshold, window=rule.window, detail=detail,
+                                title=label_color_groups(rule.title) if rule.series == 'color' else rule.title,
+                                group=rule.series, mode=mode, observed=count, values=list(rule.values),
+                                threshold=rule.threshold, window=rule.window,
+                                detail=label_color_groups(detail) if rule.series == 'color' else detail,
                                 min_plan_rank=rule.min_plan_rank,
                                 scope='Current server session' if rule.session_only else 'Completed history',
                                 is_activation=mode == 'every_game' or identity not in prior_active))

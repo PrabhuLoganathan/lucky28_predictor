@@ -1,0 +1,25 @@
+{% extends 'games/alerts/layout.html' %}
+{% block alert_content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+<div><h2 class="alert-page-title">Group Absence Alerts</h2><p class="text-secondary mb-0">Observed completed rounds since each group last appeared.</p></div>
+<a class="btn btn-primary" href="{% url 'group_absence_settings' %}?stream={{ stream.key|urlencode }}">Edit thresholds</a>
+</div>
+<form method="get" class="alert-toolbar mb-3"><label for="stream">Result stream</label><select id="stream" name="stream" class="form-select w-auto">{% for item in streams %}<option value="{{ item.key }}" {% if item.key == stream.key %}selected{% endif %}>{{ item.key }}</option>{% endfor %}</select><button class="btn btn-outline-secondary">Show</button><a class="btn btn-outline-secondary" href="?stream={{ stream.key|urlencode }}">Refresh counts</a></form>
+<p>Delivery: <strong>{% if stream.enabled %}Enabled{% else %}Paused{% endif %}</strong> · {{ stream.observed_rounds }} observed rounds · Evaluated through <strong>{{ stream.last_round|default:'—' }}</strong>. Counts continue across midnight and while paused.</p>
+{% if not stream.complete %}<div class="alert alert-warning" role="status"><strong>Data incomplete — alerts paused.</strong> {{ stream.incomplete_reason }} Counts below reflect only valid observed rounds. Reconcile the missing or invalid results to resume.</div>{% endif %}
+<div class="table-responsive"><table class="table alert-table"><thead><tr><th>Group / numbers</th><th>Last matching result</th><th>Last round / time</th><th>Current absence</th><th>Saved threshold</th><th>Group enabled</th><th>Alert state</th></tr></thead><tbody>
+{% for row in rows %}<tr><td><span aria-hidden="true" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{{ row.group.color }}"></span> <strong>{{ row.group.id }} · {{ row.group.name }}</strong><br><small>{{ row.group.numbers|join:', ' }}</small></td>
+<td>{% if row.state.last_number != None %}{{ row.state.last_number }}{% else %}Not seen in available history{% endif %}</td>
+<td>{% if row.state.last_round %}<a href="{% url 'game_detail' row.state.last_round %}">{{ row.state.last_round }}</a><br><small>{{ row.state.last_timestamp|date:'Y-m-d H:i:s T' }}</small>{% else %}Unknown{% endif %}</td>
+<td>{% if not row.state.last_round %}Absent for at least {% endif %}<strong>{{ row.state.absence }}</strong> observed rounds</td>
+<td>{{ row.state.threshold|default_if_none:'Not configured' }}</td><td>{{ row.state.enabled|yesno:'Enabled,Disabled' }}</td><td><span class="alert-status">{{ row.status }}</span>{% if row.state.notified %}<br><small>Alert already recorded this absence</small>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="alert-note">These alerts describe observed absence; they do not predict the next result. Telegram recipients and delivery are managed under <a href="{% url 'alert_destinations' %}">Destinations</a> and <a href="{% url 'alert_settings' %}">Telegram &amp; worker</a>.</p>
+<h3 class="h5 mt-4">Alert history</h3>
+{% for event in page_obj %}<details class="card p-3 mb-2"><summary>{{ event.snapshot.group_id }} · {{ event.snapshot.color }} · {{ event.created_at|date:'Y-m-d H:i:s T' }} · {% if event.resolved_at %}Resolved {{ event.resolved_at|date:'Y-m-d H:i:s T' }}{% else %}Active absence{% endif %}</summary><div class="mt-3" style="white-space:pre-line">{{ event.message|safe }}</div><a href="{% url 'alert_deliveries' %}">Delivery history</a></details>{% empty %}<p class="alert-empty">No group absence alerts yet. Configure your own thresholds to get started.</p>{% endfor %}
+{% include 'games/alerts/pagination.html' %}
+<script>
+// Refresh only the read-only dashboard. Never reload unsaved settings.
+setTimeout(() => { if (!document.querySelector('details[open]')) window.location.reload(); }, 15000);
+</script>
+{% endblock %}

@@ -185,7 +185,7 @@
     <div class="dashboard-header">
         <div>
             <h1 style="margin: 0; font-size: 1.5rem;">Live Gap Analysis</h1>
-            <p style="margin: 4px 0 0 0; color: var(--text-muted);">Real-time tracking of number droughts against historical maximums.</p>
+            <p style="margin: 4px 0 0 0; color: var(--text-muted);">Same completed history as the Global Timeline. Gaps count observed games; averages and maximums use completed gaps between appearances.</p>
         </div>
         <div class="status-indicator">
             <div class="pulse-dot"></div>
@@ -210,9 +210,12 @@
 </div>
 
 <script>
+    let updatingGaps = false;
     function updateDashboard() {
-        fetch('/api/gaps/')
-            .then(response => response.json())
+        if (updatingGaps) return;
+        updatingGaps = true;
+        fetch('/api/gaps/' + window.location.search, {cache: 'no-store', signal: AbortSignal.timeout(12000)})
+            .then(response => {if (!response.ok) throw new Error('History unavailable'); return response.json();})
             .then(data => {
                 const container = document.getElementById('gaps-container');
                 container.innerHTML = '';
@@ -229,21 +232,21 @@
                     }
                     
                     card.innerHTML = `
-                        <div class="number-header color-${stat.color}">${stat.number}</div>
+                        <div class="number-header" style="color:${stat.display_color}">${stat.number}</div>
                         
                         <div class="gap-metric">
                             <span class="gap-metric-label">Current Gap</span>
-                            <span class="gap-metric-value current">${stat.current_gap}</span>
+                            <span class="gap-metric-value current">${stat.current_gap === null ? '—' : stat.current_gap + (stat.gap_lower_bound ? '+' : '')}</span>
                         </div>
                         
                         <div class="stats-row">
                             <div class="stat-mini">
                                 <span class="label">Average</span>
-                                <span class="val">${stat.average_gap}</span>
+                                <span class="val">${stat.average_gap ?? '—'}</span>
                             </div>
                             <div class="stat-mini">
                                 <span class="label">Max Gap</span>
-                                <span class="val">${stat.max_gap}</span>
+                                <span class="val">${stat.max_gap ?? '—'}</span>
                             </div>
                         </div>
                     `;
@@ -252,15 +255,17 @@
                 });
                 
                 const d = new Date();
-                document.getElementById('last-updated').textContent = 'Last updated: ' + d.toLocaleTimeString();
+                document.getElementById('last-updated').textContent = data.latest_game_id ? 'As of #' + data.latest_game_id + ' · ' + d.toLocaleTimeString() : 'Waiting for completed results';
             })
-            .catch(error => console.error('Error fetching gap stats:', error));
+            .catch(error => {document.getElementById('last-updated').textContent = 'History unavailable · retrying';})
+            .finally(() => {updatingGaps = false;});
     }
     
     // Initial load
     updateDashboard();
     
     // Poll every 3 seconds
-    setInterval(updateDashboard, 3000);
+    setInterval(() => {if (!document.hidden) updateDashboard();}, 3000);
+    document.addEventListener('visibilitychange', () => {if (!document.hidden) updateDashboard();});
 </script>
 {% endblock %}

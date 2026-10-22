@@ -14,6 +14,7 @@ from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.cache import never_cache
 from .forms import AnalysisFilterForm, DateRangeForm, DeleteDayForm
 from .services.history import completed_games, daily_summaries, day_context, filter_period
 from .services.alerts import record_live_event
@@ -173,6 +174,20 @@ def update_winner(request, game_no):
         if f in request.data:
             setattr(obj, f, request.data[f])
 
+    # Reject invalid or unfinished winners before any counters/notifications.
+    from .services.group_absence import report_issue
+    from rest_framework import serializers
+    result_field = serializers.IntegerField(min_value=0, max_value=27)
+    try:
+        obj.winning_number = result_field.run_validation(obj.winning_number)
+        if obj.status is not None:
+            obj.status = serializers.ChoiceField(choices=[3, 4]).run_validation(obj.status)
+        if obj.winner_event_ts:
+            obj.winner_event_ts = serializers.DateTimeField().run_validation(obj.winner_event_ts)
+    except serializers.ValidationError:
+        report_issue(obj.game_type or 'lucky28', str(game_no), 'Invalid or uncompleted winner event rejected.')
+        return Response({'error': 'A completed result from 0 to 27, status 3 or 4, and a valid timestamp are required.'}, status=400)
+
     # Determine Color
     if obj.winning_number is not None:
         obj.winner_color = get_winning_color(obj.winning_number)
@@ -323,6 +338,7 @@ def signals_config_action(request, action):
     return Response({"error": "Invalid action"}, status=400)
 
 # --- Pro Analysis Dashboard ---
+@never_cache
 def pro_dashboard(request):
     """
     Main view for the advanced Lucky 28 stats dashboard.
@@ -502,19 +518,13 @@ def live_gaps_dashboard(request):
 
 @api_view(["GET"])
 def api_live_gaps(request):
-    """
-    Returns JSON payload of NumberGapStat for real-time polling.
-    """
-    stats = NumberGapStat.objects.all().order_by('number')
-    data = []
-    for s in stats:
-        data.append({
-            'number': s.number,
-            'current_gap': s.current_gap,
-            'max_gap': s.max_gap,
-            'average_gap': s.average_gap,
-            'color': get_winning_color(s.number),
-            'parity': 'Even' if s.number % 2 == 0 else 'Odd',
-            'size': 'Big' if 14 <= s.number <= 27 else 'Small'
-        })
-    return Response({"stats": data})
+    from .services.number_history import completed_history, number_statistics
+    from .timeline_views import stream
+    key = stream(request)
+    if key is None:
+        return Response({'error': 'Unknown stream.'}, status=400)
+    games = completed_history(key)
+    response = Response(dict(stats=number_statistics(games), stream=key, observed_games=len(games),
+        latest_game_id=games[0].game_no if games else None, checked_at=timezone.now().isoformat()))
+    response['Cache-Control'] = 'no-store'
+    return response

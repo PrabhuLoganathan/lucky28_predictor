@@ -1,6 +1,12 @@
 from django.db import models
 from .alert_models import (AlertRule, AlertDestination, AlertEvaluation, AlertOccurrence, AlertDelivery, AlertRuntime, AlertSettings)
 
+from .group_models import (GroupAbsenceStream, GroupAbsenceState, GroupAbsenceChange, GroupAbsenceEvent, GroupDataIssue)
+
+from .window_models import WindowAlertState, WindowAlertEvent
+
+from .category_models import CategoryAlertSettings, CategoryAlertRule, CategoryAlertEvent, CategoryAlertChange
+
 class GameRound(models.Model):
     game_no = models.CharField(max_length=32, unique=True, db_index=True)
     game_type = models.CharField(max_length=32, blank=True, null=True)

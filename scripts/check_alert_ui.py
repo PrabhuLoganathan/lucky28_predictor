@@ -18,6 +18,90 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
     const base = process.env.ALERT_TEST_URL;
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
+    await page.goto(base + '/alerts/groups/settings/');
+    await expect(page.getByLabel('Red threshold', {exact:true})).toHaveValue('');
+    await page.getByLabel('Apply to all thresholds', {exact:true}).fill('3');
+    await page.getByRole('button', {name:'Populate fields', exact:true}).click();
+    await expect(page.getByLabel('Grey threshold', {exact:true})).toHaveValue('3');
+    await page.getByLabel('Enable group absence delivery', {exact:true}).check();
+    await page.getByLabel('Enable Red', {exact:true}).check();
+    await page.getByLabel('Red threshold', {exact:true}).fill('1.5');
+    await page.getByRole('button', {name:'Save settings', exact:true}).click();
+    if (await page.getByLabel('Red threshold', {exact:true}).evaluate(el => el.validity.valid)) throw new Error('Decimal threshold accepted');
+    await page.getByLabel('Red threshold', {exact:true}).fill(' 3 ');
+    await page.getByRole('button', {name:'Save settings', exact:true}).click();
+    await expect(page.getByText('Group absence settings saved and applied immediately.')).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel('Red threshold', {exact:true})).toHaveValue('3');
+    await page.getByLabel('Red threshold', {exact:true}).fill('99');
+    await page.getByRole('link', {name:'Cancel', exact:true}).click();
+    await expect(page.getByText('Threshold reached', {exact:true})).toBeVisible();
+    await expect(page.getByText('Alert already recorded this absence')).toBeVisible();
+    await page.screenshot({path:'.local/group-absence-desktop.png', fullPage:true});
+    await page.getByRole('link', {name:'Edit thresholds', exact:true}).click();
+    await expect(page.getByLabel('Red threshold', {exact:true})).toHaveValue('3');
+    await page.setViewportSize({width:390, height:844});
+    await page.getByLabel('Red threshold', {exact:true}).scrollIntoViewIfNeeded();
+    await page.screenshot({path:'.local/group-absence-settings-mobile.png'});
+    await expect(page.getByRole('heading', {name:'Group Absence Alerts — settings', exact:true})).toHaveCount(1);
+    await page.setViewportSize({width:1440, height:1050});
+    await page.goto(base + '/alerts/windows/');
+    await expect(page.getByText('All 10 results are different — no number repeats.', {exact:true})).toBeVisible();
+    await expect(page.getByLabel('Enable drought alerts', {exact:true})).not.toBeChecked();
+    await page.getByLabel('Enable drought alerts', {exact:true}).check();
+    await page.getByLabel('Enable repeat alerts', {exact:true}).check();
+    await page.getByRole('button', {name:'Save settings', exact:true}).click();
+    await expect(page.getByText('10-game alert settings saved and applied immediately.')).toBeVisible();
+    await expect(page.getByText('None — all different', {exact:true})).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel('Enable repeat alerts', {exact:true})).toBeChecked();
+    await page.getByLabel('Enable repeat alerts', {exact:true}).uncheck();
+    await page.getByRole('link', {name:'Cancel', exact:true}).click();
+    await expect(page.getByLabel('Enable repeat alerts', {exact:true})).toBeChecked();
+    await page.screenshot({path:'.local/window-alerts-desktop.png', fullPage:true});
+    await page.setViewportSize({width:390, height:844});
+    await page.getByLabel('Enable drought alerts', {exact:true}).scrollIntoViewIfNeeded();
+    await page.screenshot({path:'.local/window-alerts-mobile.png'});
+    await page.setViewportSize({width:1440, height:1050});
+    await page.goto(base + '/alerts/categories/settings/');
+    await expect(page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true})).toBeChecked();
+    await page.getByLabel('Absence threshold for all groups', {exact:true}).fill('3');
+    await page.getByRole('button', {name:'Populate absence thresholds', exact:true}).click();
+    await page.getByLabel('Streak threshold for all groups', {exact:true}).fill('3');
+    await page.getByRole('button', {name:'Populate streak thresholds', exact:true}).click();
+    await page.getByRole('button', {name:'Enable all absence', exact:true}).click();
+    await page.getByRole('button', {name:'Enable all streaks', exact:true}).click();
+    await page.getByLabel('Enable row, column and category delivery', {exact:true}).check();
+    await page.getByLabel('Row 1 absence threshold', {exact:true}).fill('1.5');
+    await page.getByRole('button', {name:'Save settings', exact:true}).click();
+    if (await page.getByLabel('Row 1 absence threshold', {exact:true}).evaluate(el => el.validity.valid)) throw new Error('Category decimal threshold accepted');
+    await page.getByLabel('Row 1 absence threshold', {exact:true}).fill(' 3 ');
+    await page.getByRole('button', {name:'Save settings', exact:true}).click();
+    await expect(page.getByText('Row, column and category settings saved and applied immediately.')).toBeVisible();
+    await page.reload();
+    await expect(page.locator('.absence-enabled:checked')).toHaveCount(15);
+    await page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true}).uncheck();
+    await page.getByRole('button', {name:'Save settings', exact:true}).click();
+    await page.reload();
+    await expect(page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true})).not.toBeChecked();
+    await page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true}).check();
+    await page.getByRole('button', {name:'Save settings', exact:true}).click();
+    await page.reload();
+    await expect(page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true})).toBeChecked();
+    await expect(page.locator('.streak-enabled:checked')).toHaveCount(15);
+    await expect(page.getByLabel('Column 7 streak threshold', {exact:true})).toHaveValue('3');
+    await page.getByLabel('Column 7 streak threshold', {exact:true}).fill('99');
+    await page.getByRole('link', {name:'Cancel', exact:true}).click();
+    await expect(page.locator('table tbody tr')).toHaveCount(15);
+    await expect(page.getByText('SE — Small Even', {exact:true})).toBeVisible();
+    await page.screenshot({path:'.local/category-alerts-desktop.png', fullPage:true});
+    await page.getByRole('link', {name:'Edit category thresholds', exact:true}).click();
+    await expect(page.getByLabel('Column 7 streak threshold', {exact:true})).toHaveValue('3');
+    await page.setViewportSize({width:390, height:844});
+    await page.getByLabel('Row 1 absence threshold', {exact:true}).scrollIntoViewIfNeeded();
+    await page.screenshot({path:'.local/category-settings-mobile.png'});
+    if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Category settings overflow viewport');
+    await page.setViewportSize({width:1440, height:1050});
     await page.goto(base + '/alerts/rules/new/');
     await page.getByLabel('Rule name', {exact:true}).fill('Browser smoke rule');
     await page.getByLabel('Matching values', {exact:true}).selectOption('Big');
@@ -53,6 +137,10 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
       return await page.getByRole('heading', {name:'Running', exact:true}).count();
     }, {timeout:15000}).toBe(1);
     await page.screenshot({path:'.local/alert-settings-desktop.png', fullPage:true});
+    // The worker and multiple dashboard tabs must safely share SQLite writes.
+    const concurrentResponses = await Promise.all(Array.from({length:12}, (_, i) =>
+      page.request.get(base + (i % 2 ? '/alerts/categories/settings/' : '/alerts/categories/'))));
+    if (concurrentResponses.some(response => response.status() !== 200)) throw new Error('Concurrent category requests failed');
     await page.getByRole('button', {name:'Stop worker', exact:true}).click();
     await expect.poll(async () => {
       await page.goto(base + '/alerts/settings/');
@@ -66,7 +154,7 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
       if(response.status() !== 200) throw new Error(path + ' failed');
     }
     if(errors.length) throw new Error(errors.join('\n'));
-    console.log('Browser checks passed: rule create/edit/toggle, destination form, token validation, worker start/stop, desktop/mobile pages.');
+    console.log('Browser checks passed: category settings enable/validate/save/cancel, 10-game alerts save/cancel, group thresholds, validation, save/cancel, alert dashboard, rule create/edit/toggle, destination form, token validation, worker start/stop, desktop/mobile pages.');
   } finally { await browser.close(); }
 })().catch(error => {console.error(error); process.exitCode=1;});
 '''
@@ -81,6 +169,11 @@ def main():
         manage = [sys.executable, str(ROOT / 'django_lucky28/manage.py')]
         for command in [('migrate', '--noinput'), ('seed_alert_rules',)]:
             subprocess.run(manage + list(command), cwd=ROOT, env=environment, check=True, capture_output=True)
+        subprocess.run(manage + ['shell', '-c',
+            'from games.models import GameRound; from django.utils import timezone; '
+            '[GameRound.objects.create(game_no=f"R{100+i}", game_type="lucky28", has_winner=True, '
+            'winning_number=n, status=3, winner_event_ts=timezone.now()) for i,n in enumerate([26,8,12,6,0,2,4,10,14,16])]'],
+            cwd=ROOT, env=environment, check=True, capture_output=True)
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]

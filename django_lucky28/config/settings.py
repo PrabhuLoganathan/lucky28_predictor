@@ -63,6 +63,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': str(PROJECT_ROOT / os.environ.get('LUCKY28_DB_PATH', 'lucky28.db')),
+        # Acquire the write reservation before an atomic block reads state.
+        # Deferred read-to-write upgrades can fail immediately when the worker
+        # and a dashboard request reconcile alert state concurrently.
+        'OPTIONS': {'transaction_mode': 'IMMEDIATE', 'timeout': 20},
     }
 }
 
@@ -82,3 +86,6 @@ ALERT_STATE_DIR = Path(os.environ.get('ALERT_STATE_DIR', str(PROJECT_ROOT / '.lo
 ALERT_MAX_EVENT_AGE_SECONDS = 120
 ALERT_HISTORY_LIMIT = 1002
 ALERT_COLLECTION_TIMEOUT_MINUTES = 3
+
+# Optional externally reachable origin for links in group absence notifications.
+ALERT_PUBLIC_BASE_URL = os.environ.get('ALERT_PUBLIC_BASE_URL', '')

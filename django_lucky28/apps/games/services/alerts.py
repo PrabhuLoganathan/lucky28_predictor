@@ -51,6 +51,12 @@ def queue_delivery(key, destination, kind, payload, evaluation=None):
 def record_live_event(game, phase):
     # Legacy endpoints may assign timestamp/number strings to the model instance.
     game.refresh_from_db()
+    from .group_absence import synchronize, stream_key
+    synchronize(stream_key(game))
+    from .window_alerts import synchronize as synchronize_windows
+    synchronize_windows(stream_key(game))
+    from .category_alerts import synchronize as synchronize_categories
+    synchronize_categories(stream_key(game))
     if game.game_type not in (None, '', 'lucky28'):
         return None
     observed = game.pre_event_ts if phase == 'pre' else game.winner_event_ts
@@ -95,7 +101,9 @@ def record_live_event(game, phase):
     for rule in AlertRule.objects.filter(enabled=True).order_by('key'):
         active = prior if not rule.session_only or (previous and previous.session_started_at == session_start) else []
         matches.extend(evaluate_rules([rule], session_facts if rule.session_only else facts, active))
+    from .card_timeline import snapshot_from_games
     evidence = dict(version=1, game_no=game.game_no, reference=f'alert-{game.pk}',
+                    global_timeline=snapshot_from_games(history),
                     captured_at=now.isoformat(), observed_at=observed.isoformat(),
                     session_started_at=session_start.isoformat(), history_count=len(history),
                     history_limit=settings.ALERT_HISTORY_LIMIT,
@@ -123,12 +131,14 @@ def queue_results(game, now):
     evaluation = AlertEvaluation.objects.filter(game=game).first()
     if not evaluation:
         return
+    from .card_timeline import snapshot_for_round
+    global_timeline = snapshot_for_round(game.game_type or 'lucky28', game.game_no)
     for original in evaluation.deliveries.filter(kind='alert', status__in=['pending', 'sending', 'sent']).select_related('destination'):
         destination = original.destination
         if destination.enabled and destination.send_results and (not destination.expires_at or destination.expires_at > now):
             queue_delivery(f'result:{evaluation.pk}:{destination.pk}', destination, 'result',
                            dict(game_no=game.game_no, captured_at=now.isoformat(), result=result_snapshot(game),
-                                reference=evaluation.evidence['reference'], matches=[]), evaluation)
+                                reference=evaluation.evidence['reference'], matches=[], global_timeline=global_timeline), evaluation)
 
 
 @transaction.atomic

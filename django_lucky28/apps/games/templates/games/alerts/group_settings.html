@@ -1,0 +1,32 @@
+{% extends 'games/alerts/layout.html' %}
+{% block alert_content %}
+<h2 class="alert-page-title mb-2">Group Absence Alerts — settings</h2>
+<p>Stream: <strong>{{ stream.key }}</strong>. Choose each threshold yourself. Supported range: 1–{{ maximum }} whole rounds. Changes take effect when you save.</p>
+<form method="post" class="alert-form" id="group-settings">{% csrf_token %}
+{{ form.non_field_errors }}
+<div class="form-check mb-4">{{ form.enabled }}<label for="{{ form.enabled.id_for_label }}" class="form-check-label">{{ form.enabled.label }}</label></div>
+<div class="alert-toolbar mb-3"><label for="apply-value">Apply to all thresholds</label><input id="apply-value" class="form-control w-auto" inputmode="numeric" maxlength="7" placeholder="Whole rounds"><button type="button" class="btn btn-outline-secondary" id="apply-all">Populate fields</button></div>
+<div class="table-responsive"><table class="table"><thead><tr><th>Group</th><th>Numbers</th><th>Enabled</th><th>Threshold in rounds</th></tr></thead><tbody>
+{% for row in group_rows %}<tr><th><span aria-hidden="true" style="color:{{ row.group.color }}">●</span> {{ row.group.id }} · {{ row.group.name }}</th><td>{{ row.group.numbers|join:', ' }}</td><td><label for="{{ row.enabled.id_for_label }}" class="visually-hidden">{{ row.enabled.label }}</label>{{ row.enabled }}</td><td><label for="{{ row.threshold.id_for_label }}" class="visually-hidden">{{ row.threshold.label }}</label>{{ row.threshold }}{{ row.threshold.errors }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="form-text">Pausing delivery keeps all counts and prior notifications. A qualifying group alerts only once per absence, even after changing thresholds or toggling enable.</p>
+<button type="submit" class="btn btn-primary">Save settings</button> <a href="{% url 'group_absence_dashboard' %}?stream={{ stream.key|urlencode }}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+<h3 class="h5 mt-5">Settings history</h3><p class="text-secondary">Latest 50 changes · {{ display_timezone }}</p>
+<div class="table-responsive"><table class="table"><thead><tr><th>Saved at</th><th>Group</th><th>Old value</th><th>New value</th><th>Editor</th></tr></thead><tbody>{% for change in changes %}<tr><td>{{ change.saved_at|date:'Y-m-d H:i:s T' }}</td><td>{{ change.group_id }}</td><td>Enabled: {{ change.old_value.enabled|yesno:'Yes,No' }}{% if change.group_id != 'Global' %}; threshold: {{ change.old_value.threshold|default_if_none:'Unset' }}{% endif %}</td><td>Enabled: {{ change.new_value.enabled|yesno:'Yes,No' }}{% if change.group_id != 'Global' %}; threshold: {{ change.new_value.threshold|default_if_none:'Unset' }}{% endif %}</td><td>{{ change.editor }}</td></tr>{% empty %}<tr><td colspan="5">No saved changes yet.</td></tr>{% endfor %}</tbody></table></div>
+<script>
+const form = document.getElementById('group-settings');
+const fields = [...form.querySelectorAll('.group-threshold')];
+const maximum = {{ maximum }};
+function validate(field) {
+  const value = field.value.trim();
+  field.value = value;
+  const enabled = document.getElementById(field.id.replace('_threshold', '_enabled')).checked;
+  const valid = (!value && !enabled) || (/^[0-9]{1,7}$/.test(value) && Number(value) >= 1 && Number(value) <= maximum);
+  field.setCustomValidity(valid ? '' : `Enter a whole number of rounds greater than 0. Maximum: ${maximum.toLocaleString('en-US')}.`);
+}
+form.addEventListener('input', () => fields.forEach(validate));
+form.addEventListener('submit', event => { fields.forEach(validate); if (!form.reportValidity()) event.preventDefault(); });
+document.getElementById('apply-all').addEventListener('click', () => { fields.forEach(field => { field.value = document.getElementById('apply-value').value.trim(); validate(field); }); });
+</script>
+{% endblock %}

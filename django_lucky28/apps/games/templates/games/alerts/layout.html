@@ -7,6 +7,10 @@
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><div><h1 class="mb-1">Alert center</h1><p class="text-secondary mb-0">Configure patterns, choose recipients, and track delivery.</p></div><a class="btn btn-outline-secondary" href="/">Game dashboard</a></div>
 <nav class="alert-nav" aria-label="Alert center">
 <a href="{% url 'alerts_dashboard' %}" class="{% if alert_tab == 'overview' %}active{% endif %}">Overview</a>
+<a href="{% url 'alert_timeline' %}" class="{% if alert_tab == 'timeline' %}active{% endif %}">Global timeline</a>
+<a href="{% url 'group_absence_dashboard' %}" class="{% if alert_tab == 'groups' %}active{% endif %}">Group absence</a>
+<a href="{% url 'window_alerts' %}" class="{% if alert_tab == 'windows' %}active{% endif %}">Recent 10 games</a>
+<a href="{% url 'category_alerts' %}" class="{% if alert_tab == 'categories' %}active{% endif %}">Rows &amp; categories</a>
 <a href="{% url 'alert_rules' %}" class="{% if alert_tab == 'rules' %}active{% endif %}">Rules</a>
 <a href="{% url 'alert_destinations' %}" class="{% if alert_tab == 'destinations' %}active{% endif %}">Destinations</a>
 <a href="{% url 'alert_settings' %}" class="{% if alert_tab == 'settings' %}active{% endif %}">Telegram &amp; worker</a>

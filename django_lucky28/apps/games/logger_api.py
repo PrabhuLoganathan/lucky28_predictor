@@ -91,7 +91,15 @@ def health(request):
 @permission_classes([LoggerPermission])
 def events(request):
     serializer = LoggerEventSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+    if not serializer.is_valid():
+        # Persist an authenticated invalid winner as a continuity issue, without
+        # accepting it as a result or allowing it to increment absence counts.
+        raw = request.data if isinstance(request.data, dict) else {}
+        round_id = raw.get('game_no')
+        if raw.get('game_type') == 'lucky28' and raw.get('phase') == 'winner' and isinstance(round_id, str) and 0 < len(round_id.strip()) <= 32:
+            from .services.group_absence import report_issue
+            report_issue('lucky28', round_id.strip(), 'Invalid or uncompleted winner event rejected.')
+        return Response(serializer.errors, status=400)
     event = serializer.validated_data
     data = event['data']
     observed = event['observed_at']

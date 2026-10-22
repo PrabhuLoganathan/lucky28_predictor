@@ -15,6 +15,7 @@
     </div>
 
     {% include 'games/day_navigation.html' %}
+    {% include 'games/timeline_widget.html' %}
     <div class="card mb-4"><div class="card-body">
         <form method="get" class="d-flex flex-wrap align-items-end gap-3">
             <div><label for="analysis-start" class="form-label">From</label>
@@ -458,7 +459,7 @@
 
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Recent 10-Game Windows</h6>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><h6 class="m-0 font-weight-bold text-primary">Recent 10-Game Windows</h6><a class="btn btn-sm btn-outline-primary" href="{% url 'window_alerts' %}">Configure 10-game alerts</a></div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -480,7 +481,7 @@
                                 {% if row.has_repetition %}
                                 <span class="badge bg-danger">Repeat</span>
                                 {% else %}
-                                <span class="badge bg-success">Unique</span>
+                                <span class="badge bg-success" title="All 10 results are different">Drought · all different</span>
                                 {% endif %}
                             </td>
                             <td>{{ row.repeated_details|default:"-" }}</td>

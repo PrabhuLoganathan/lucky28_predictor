@@ -111,6 +111,9 @@ def main():
         print('Ready: shared Python environment, Node.js, and authenticated Lucky28 API.')
         return
     run([python, ROOT / 'django_lucky28/manage.py', 'migrate', '--noinput'])
+    run([python, ROOT / 'django_lucky28/manage.py', 'sync_group_absence'])
+    run([python, ROOT / 'django_lucky28/manage.py', 'sync_window_alerts'])
+    run([python, ROOT / 'django_lucky28/manage.py', 'sync_category_alerts'])
     if args.setup:
         run([python, ROOT / 'django_lucky28/manage.py', 'seed_alert_rules'])
         print('Setup complete. Start both services with: python3 run.py')

@@ -1,0 +1,27 @@
+{% extends 'games/alerts/layout.html' %}
+{% block alert_content %}
+<style>
+.window-results{display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0}.window-result{min-width:3rem;padding:.6rem;text-align:center;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card)}.window-result:last-child{border-color:#8860ef}.window-result strong{display:block;font-size:1.25rem}
+</style>
+<div class="d-flex justify-content-between flex-wrap gap-2 mb-3"><div><h2 class="alert-page-title">Recent 10-game alerts</h2><p class="text-secondary mb-0">A rolling window of exactly 10 completed results.</p></div><a class="btn btn-outline-secondary align-self-start" href="{% url 'pro_dashboard' %}#repetition">View analysis</a></div>
+<form method="get" class="alert-toolbar mb-3"><label for="stream">Result stream</label><select name="stream" id="stream" class="form-select w-auto">{% for stream in streams %}<option value="{{ stream.key }}" {% if stream.key == state.stream_id %}selected{% endif %}>{{ stream.key }}</option>{% endfor %}</select><button class="btn btn-outline-secondary">Show</button><a class="btn btn-outline-secondary" href="?stream={{ state.stream_id|urlencode }}">Refresh results</a></form>
+<section class="card p-4 mb-4" aria-label="Latest window">
+<h3 class="h5">Latest window: <span class="alert-status">{{ window.status }}</span></h3>
+{% if window.reason %}<p class="text-warning" role="status">{{ window.reason }}</p>{% endif %}
+{% if window.start_round %}<p class="mb-0">Rounds <a href="{% url 'game_detail' window.start_round %}">{{ window.start_round }}</a>–<a href="{% url 'game_detail' window.end_round %}">{{ window.end_round }}</a></p>{% endif %}
+<div class="window-results">{% for result in window.results %}<div class="window-result" title="Round {{ result.round_id }}"><strong>{{ result.number }}</strong><small>{% if forloop.last %}Newest{% else %}{{ forloop.counter }}{% endif %}</small></div>{% empty %}<p class="text-secondary">Waiting for completed results.</p>{% endfor %}</div>
+{% if window.status == 'Drought' %}<p class="mb-0">All 10 results are different — no number repeats.</p>{% elif window.status == 'Repeat' %}<p>Repeated numbers: <strong>{{ window.repeated_details }}</strong></p><p class="mb-0">{% if window.newest_repeats %}The newest result repeats within this window.{% else %}The repeated numbers are earlier in this window. The newest result does not create a new repeat alert.{% endif %}</p>{% endif %}
+<p class="text-secondary mt-3 mb-0">Oldest → newest. A missing or invalid round inside the window pauses alerts. Older gaps outside the window do not block these alerts.</p>
+</section>
+<form method="post" class="alert-form card p-4 mb-4" id="window-settings">{% csrf_token %}<h3 class="h5">Alert settings</h3>{% include 'games/alerts/form_fields.html' %}<div><button class="btn btn-primary" type="submit">Save settings</button> <a class="btn btn-outline-secondary" href="?stream={{ state.stream_id|urlencode }}">Cancel</a></div></form>
+<p class="alert-note">Example drought: <strong>0, 2, 4, 6, 8, 10, 12, 14, 16, 18</strong>. If the next result is 8, the latest ten become <strong>2, 4, 6, 8, 10, 12, 14, 16, 18, 8</strong>: a repeat. Alerts describe observed results. Delivery uses your existing <a href="{% url 'alert_destinations' %}">destinations</a> and <a href="{% url 'alert_settings' %}">Telegram worker</a>.</p>
+<h3 class="h5 mt-4">10-game alert history</h3>
+<div class="table-responsive"><table class="table"><thead><tr><th>Alert time</th><th>Type</th><th>Round range</th><th>Results, oldest first</th><th>Repeated numbers</th><th>State</th></tr></thead><tbody>{% for event in page_obj %}<tr><td>{{ event.created_at|date:'Y-m-d H:i:s T' }}</td><td>{{ event.get_kind_display }}</td><td>{{ event.snapshot.start_round }}–{{ event.snapshot.end_round }}</td><td>{{ event.snapshot.numbers|join:', ' }}</td><td>{{ event.snapshot.repeated_details|default:'None — all different' }}</td><td>{% if event.invalidated_at %}Closed / superseded{% else %}Recorded{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="alert-empty">No 10-game alerts yet.</td></tr>{% endfor %}</tbody></table></div>
+{% include 'games/alerts/pagination.html' %}
+<a href="{% url 'alert_deliveries' %}">View notification delivery history</a>
+<script>
+let unsaved = false;
+document.getElementById('window-settings').addEventListener('change', () => { unsaved = true; });
+setTimeout(() => { if (!unsaved) window.location.reload(); }, 15000);
+</script>
+{% endblock %}

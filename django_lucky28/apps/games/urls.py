@@ -2,9 +2,18 @@ from django.urls import path
 from . import views
 from . import logger_api
 from . import alert_views
-from . import alert_management
+from . import timeline_views
+from . import alert_management, group_views, window_views, category_views
 
 urlpatterns = [
+    path('alerts/timeline/', timeline_views.dashboard, name='alert_timeline'),
+    path('api/trackers/live/', timeline_views.live, name='timeline_live'),
+    path('api/trackers/<str:tracker_key>/reset/', timeline_views.reset, name='timeline_reset'),
+    path('alerts/categories/', category_views.dashboard, name='category_alerts'),
+    path('alerts/categories/settings/', category_views.configuration, name='category_alert_settings'),
+    path('alerts/windows/', window_views.dashboard, name='window_alerts'),
+    path('alerts/groups/', group_views.dashboard, name='group_absence_dashboard'),
+    path('alerts/groups/settings/', group_views.configuration, name='group_absence_settings'),
     path('alerts/', alert_views.monitor, name='alerts_dashboard'),
     path('alerts/rules/', alert_management.rules, name='alert_rules'),
     path('alerts/rules/new/', alert_management.rule_edit, name='alert_rule_new'),

@@ -1,0 +1,48 @@
+{% extends 'games/alerts/layout.html' %}
+{% block alert_content %}
+<style>#category-settings .table-responsive{position:relative}#category-settings .category-threshold{min-width:5rem}</style>
+<h2 class="alert-page-title">Rows, columns &amp; SE/BE/BO/SO — settings</h2>
+<p class="mt-2">Stream: <strong>{{ config.stream_id }}</strong>. Set absence and consecutive-streak alerts independently. Supported thresholds: 1–{{ maximum }} whole completed rounds.</p>
+<form method="post" class="alert-form" id="category-settings">{% csrf_token %}
+{{ form.non_field_errors }}
+<div class="form-check mb-4">{{ form.enabled }}<label class="form-check-label" for="{{ form.enabled.id_for_label }}">{{ form.enabled.label }}</label></div>
+<div class="form-check mb-2">{{ form.notify_changes }}<label class="form-check-label" for="{{ form.notify_changes.id_for_label }}">{{ form.notify_changes.label }}</label></div>
+<p class="form-text mb-4">One follow-up goes to recipients who received the original alert. It includes the ending result and final count. Continuing counts do not send extra messages.</p>
+<div class="card p-3 mb-4">
+<p>Shortcuts populate the fields below. Review them before saving.</p>
+<div class="alert-toolbar mb-3"><label for="all-absence">Absence threshold for all groups</label><input id="all-absence" class="form-control w-auto" inputmode="numeric" maxlength="7"><button type="button" class="btn btn-outline-secondary" data-apply="absence">Populate absence thresholds</button></div>
+<div class="alert-toolbar"><label for="all-streak">Streak threshold for all groups</label><input id="all-streak" class="form-control w-auto" inputmode="numeric" maxlength="7"><button type="button" class="btn btn-outline-secondary" data-apply="streak">Populate streak thresholds</button></div>
+<div class="alert-toolbar mt-3"><button type="button" class="btn btn-outline-secondary" data-toggle-mode="absence" data-enable="1">Enable all absence</button><button type="button" class="btn btn-outline-secondary" data-toggle-mode="absence" data-enable="0">Disable all absence</button><button type="button" class="btn btn-outline-secondary" data-toggle-mode="streak" data-enable="1">Enable all streaks</button><button type="button" class="btn btn-outline-secondary" data-toggle-mode="streak" data-enable="0">Disable all streaks</button></div>
+</div>
+{% for section in sections %}<h3 class="h5 mt-4">{{ section.name }}</h3>
+<div class="table-responsive"><table class="table" style="min-width:650px"><thead><tr><th>Group / member numbers</th><th>Absence enabled</th><th>Missed rounds</th><th>Streak enabled</th><th>Consecutive hits</th></tr></thead><tbody>
+{% for row in section.rows %}<tr><th>{{ row.group.name }}<br><small class="fw-normal">[{{ row.group.numbers|join:', ' }}]</small></th>
+<td><label for="{{ row.absence_enabled.id_for_label }}" class="visually-hidden">{{ row.absence_enabled.label }}</label>{{ row.absence_enabled }}</td>
+<td><label for="{{ row.absence_threshold.id_for_label }}" class="visually-hidden">{{ row.absence_threshold.label }}</label>{{ row.absence_threshold }}{{ row.absence_threshold.errors }}</td>
+<td><label for="{{ row.streak_enabled.id_for_label }}" class="visually-hidden">{{ row.streak_enabled.label }}</label>{{ row.streak_enabled }}</td>
+<td><label for="{{ row.streak_threshold.id_for_label }}" class="visually-hidden">{{ row.streak_threshold.label }}</label>{{ row.streak_threshold }}{{ row.streak_threshold.errors }}</td></tr>{% endfor %}
+</tbody></table></div>{% endfor %}
+<p class="form-text">A streak can contain different numbers from the same group: 14 → 19 → 20 is a Row 3 streak of 3. Each absence or streak alerts once per period. Saving, toggling or changing thresholds keeps its notification history.</p>
+<button class="btn btn-primary" type="submit">Save settings</button> <a class="btn btn-outline-secondary" href="{% url 'category_alerts' %}?stream={{ config.stream_id|urlencode }}">Cancel</a>
+</form>
+<h3 class="h5 mt-5">Settings history</h3><p class="text-secondary">Latest 50 changes. Times use the application timezone.</p>
+<div class="table-responsive"><table class="table"><thead><tr><th>Saved at</th><th>Group / alert</th><th>Old value</th><th>New value</th><th>Editor</th></tr></thead><tbody>{% for change in changes %}<tr><td>{{ change.saved_at|date:'Y-m-d H:i:s T' }}</td><td>{{ change.group_id }} {{ change.mode }}</td><td>Enabled: {{ change.old_value.enabled|yesno:'Yes,No' }}; threshold: {{ change.old_value.threshold|default_if_none:'Unset' }}</td><td>Enabled: {{ change.new_value.enabled|yesno:'Yes,No' }}; threshold: {{ change.new_value.threshold|default_if_none:'Unset' }}</td><td>{{ change.editor }}</td></tr>{% empty %}<tr><td colspan="5">No saved changes yet.</td></tr>{% endfor %}</tbody></table></div>
+<script>
+const categoryForm = document.getElementById('category-settings');
+const categoryFields = [...categoryForm.querySelectorAll('.category-threshold')];
+function validateCategory(field) {
+  const value = field.value.trim(); field.value = value;
+  const enabled = document.getElementById(field.id.replace('_threshold', '_enabled')).checked;
+  const valid = (!value && !enabled) || (/^[0-9]{1,7}$/.test(value) && Number(value) >= 1 && Number(value) <= {{ maximum }});
+  field.setCustomValidity(valid ? '' : 'Enter a whole number of rounds greater than 0. Maximum: {{ maximum }}.');
+}
+categoryForm.addEventListener('input', () => categoryFields.forEach(validateCategory));
+categoryForm.addEventListener('submit', event => { categoryFields.forEach(validateCategory); if (!categoryForm.reportValidity()) event.preventDefault(); });
+categoryForm.querySelectorAll('[data-apply]').forEach(button => button.addEventListener('click', () => {
+  categoryForm.querySelectorAll(`.${button.dataset.apply}-threshold`).forEach(field => { field.value = document.getElementById(`all-${button.dataset.apply}`).value.trim(); validateCategory(field); });
+}));
+categoryForm.querySelectorAll('[data-toggle-mode]').forEach(button => button.addEventListener('click', () => {
+  categoryForm.querySelectorAll(`.${button.dataset.toggleMode}-enabled`).forEach(field => { field.checked = button.dataset.enable === '1'; }); categoryFields.forEach(validateCategory);
+}));
+</script>
+{% endblock %}

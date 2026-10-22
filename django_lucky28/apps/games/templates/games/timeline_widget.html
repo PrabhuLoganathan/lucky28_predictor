@@ -1,0 +1,30 @@
+{% load timeline_assets %}
+<link rel="stylesheet" href="{% timeline_asset 'games/timeline.css' %}">
+<section class="timeline-widget mb-4" id="global-timeline" data-feed="{% url 'timeline_live' %}" data-reset="{% url 'timeline_reset' 'TRACK' %}" aria-label="Global alert timeline">
+  {% csrf_token %}
+  <div class="tl-heading">
+    <div><div class="tl-eyebrow">NUMBER GAME · LIVE HISTORY</div><h2>Global alert timeline <span class="tl-limit">150 games</span></h2>
+    <p>All tracks share the same games, newest first. Live history across dates.</p></div>
+    <div class="tl-controls"><label>Stream <select class="form-select form-select-sm" id="tl-stream"><option value="lucky28">lucky28</option></select></label>
+      <button class="btn btn-sm btn-outline-light" id="tl-refresh" type="button" title="Refresh live results. Use your browser’s Reload button to update the whole page.">Refresh now</button>
+      <button class="btn btn-sm btn-outline-light" id="tl-pause" type="button" aria-pressed="false">Pause</button></div>
+  </div>
+  <div class="tl-status" role="status" id="tl-status">Loading timeline…</div>
+  <section class="tl-palette-section" aria-label="Live number palette">
+    <div class="tl-palette-heading"><div><h3>Live number palette</h3><p id="tl-palette-status" role="status">Loading recent results…</p></div><span class="tl-palette-key">Bright = appeared · Outline = inspecting</span></div>
+    <div class="tl-palette-layout">
+      <div><div id="tl-palette" class="tl-palette" aria-label="Numbers 0 to 27" aria-busy="true"></div>
+        <div id="tl-recent-results" class="tl-recent-results" aria-label="Latest completed results"></div></div>
+      <aside id="tl-number-detail" class="tl-number-detail" aria-live="polite"><h3>Inspect a number</h3><p>Select any tile to see its appearances and gap history.</p></aside>
+    </div>
+    <p class="tl-palette-note">Recent badges show appearances; tile colors show filter matches. An absent number is not necessarily more likely next.</p>
+  </section>
+  <details class="tl-settings"><summary>Choose tracks</summary><div id="tl-track-options" class="tl-options"></div><p>Track visibility is saved in this browser. Reset affects only this session and stream.</p></details>
+  <div class="tl-toolbar"><span id="tl-range"></span><div><button type="button" class="btn btn-sm btn-outline-light" id="tl-prev" aria-label="Show newer games">← Newer</button> <button type="button" class="btn btn-sm btn-outline-light" id="tl-next" aria-label="Show older games">Older →</button></div></div>
+  <div id="tl-grid" class="tl-grid" tabindex="0" aria-label="Aligned game timelines"></div>
+  <div id="tl-detail" class="tl-detail" aria-live="polite">Select a result to see its game details and recorded alerts.</div>
+  <div class="tl-observations"><h3>Current pattern observations</h3><p>Calculated from uninterrupted visible history: streak ≥4, absence ≥6 (two states) or ≥12, concentration ≥7 of 10, alternating last 4. These describe past results.</p><div id="tl-events"></div></div>
+  <p class="tl-footnote">Checks every 5 seconds while this tab is visible. Dashed borders mark gaps; “?” means insufficient continuous history. Alert markers show saved events, not every possible historical match.</p>
+  <noscript>Enable JavaScript to view and refresh the live timeline.</noscript>
+</section>
+<script src="{% timeline_asset 'games/timeline.js' %}" defer></script>

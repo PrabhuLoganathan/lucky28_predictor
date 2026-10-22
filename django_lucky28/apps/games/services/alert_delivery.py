@@ -58,6 +58,34 @@ def deliver_one(delivery_id):
     if any(m['min_plan_rank'] > destination.plan_rank for m in matches):
         finish('cancelled', error='Subscription rank no longer permits this payload.')
         return True
+    if delivery.kind == 'window':
+        from .window_alerts import delivery_gate as window_delivery_gate
+        gate = window_delivery_gate(delivery.payload)
+        if gate != 'ready':
+            finish(gate, available_at=now + timedelta(seconds=30), error='10-game alert paused, expired or superseded.')
+            return True
+    if delivery.kind in ('category', 'category_end'):
+        if delivery.kind == 'category_end':
+            from .category_changes import delivery_gate as category_delivery_gate, refresh_delivery_payload as category_payload
+        else:
+            from .category_alerts import delivery_gate as category_delivery_gate, refresh_delivery_payload as category_payload
+        gate = category_delivery_gate(delivery.payload)
+        if gate != 'ready':
+            error = ('Ending evidence changed or cannot be verified.' if delivery.kind == 'category_end' and gate == 'cancelled'
+                     else 'Category alert paused, resolved or data incomplete.')
+            finish(gate, available_at=now + timedelta(seconds=30), error=error)
+            return True
+        delivery.payload = category_payload(delivery.payload)
+        AlertDelivery.objects.filter(pk=delivery.pk, status='sending').update(payload=delivery.payload)
+    if delivery.kind == 'group':
+        from .group_absence import delivery_gate, refresh_delivery_payload
+        gate = delivery_gate(delivery.payload)
+        if gate != 'ready':
+            finish(gate, available_at=now + timedelta(seconds=30),
+                   error='Group absence resolved.' if gate == 'cancelled' else 'Group alerts paused or data incomplete.')
+            return True
+        delivery.payload = refresh_delivery_payload(delivery.payload)
+        AlertDelivery.objects.filter(pk=delivery.pk, status='sending').update(payload=delivery.payload)
     if delivery.kind == 'alert':
         game = delivery.evaluation.game if delivery.evaluation else None
         if not game or game.has_winner or (now - delivery.created_at).total_seconds() > config.max_event_age_seconds:
@@ -98,8 +126,29 @@ def deliver_one(delivery_id):
             (directory / f'{delivery.pk}.jpg').write_bytes(card)
         AlertDelivery.objects.filter(pk=delivery.pk).update(artifact_path=str(artifact))
     except OSError:
-        finish('failed', error='Unable to archive outgoing artifact; nothing sent.')
+        finish('pending' if delivery.kind in ('group', 'window', 'category', 'category_end') else 'failed',
+               available_at=now + timedelta(seconds=30), error='Unable to archive outgoing artifact; nothing sent.')
         return True
+    if delivery.kind == 'group':
+        gate = delivery_gate(delivery.payload)
+        if gate != 'ready':
+            finish(gate, available_at=now + timedelta(seconds=30), error='Group eligibility changed before dispatch.')
+            return True
+    if delivery.kind == 'window':
+        gate = window_delivery_gate(delivery.payload)
+        if gate != 'ready':
+            finish(gate, available_at=now + timedelta(seconds=30), error='10-game eligibility changed before dispatch.')
+            return True
+    if delivery.kind in ('category', 'category_end'):
+        gate = category_delivery_gate(delivery.payload)
+        if (gate == 'ready' and delivery.kind == 'category_end'
+                and category_payload(delivery.payload).get('evidence_key') != delivery.payload.get('evidence_key')):
+            gate = 'pending'
+        if gate != 'ready':
+            error = ('Ending evidence changed or cannot be verified.' if delivery.kind == 'category_end' and gate == 'cancelled'
+                     else 'Category eligibility changed before dispatch.')
+            finish(gate, available_at=now + timedelta(seconds=30), error=error)
+            return True
     try:
         response = requests.post(
             f'https://api.telegram.org/bot{config.bot_token}/{method}',
