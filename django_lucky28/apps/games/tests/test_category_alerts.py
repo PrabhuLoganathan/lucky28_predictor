@@ -344,6 +344,23 @@ class CategoryAlertTests(TestCase):
         synchronize()
         self.assertEqual(AlertDelivery.objects.filter(kind='category_end').count(), 1)
 
+    def test_unchanged_ending_reuses_frozen_timeline_and_preserves_chat_id(self):
+        self.destination.chat_id = '-1000123456789'
+        self.destination.save()
+        self.configure(pairs=(('R03', 'streak'),))
+        self.sequence([0, 14, 19, 20])
+        self.mark_original_sent()
+        self.result(104, 21)
+        ending = AlertDelivery.objects.get(kind='category_end')
+        frozen = ending.payload
+        with patch('games.services.card_timeline.snapshot_for_round', side_effect=AssertionError('unchanged evidence rebuilt')):
+            synchronize()
+            synchronize()
+        ending.refresh_from_db()
+        self.assertEqual(ending.payload, frozen)
+        self.assertEqual(ending.payload['chat_id'], '-1000123456789')
+        self.assertEqual(AlertDelivery.objects.filter(kind='category_end').count(), 1)
+
     def test_unsent_original_and_preexisting_resolved_events_do_not_send_endings(self):
         self.configure(pairs=(('R03', 'streak'),))
         self.sequence([0, 14, 19, 20, 21])

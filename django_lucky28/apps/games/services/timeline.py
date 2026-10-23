@@ -2,7 +2,9 @@
 from collections import Counter, defaultdict
 from itertools import takewhile
 
-from django.db.models import Q
+from django.db.models import Q, TextField
+from django.db.models.fields.json import KT
+from django.db.models.functions import Cast
 from django.urls import reverse
 from django.utils import timezone
 
@@ -60,25 +62,41 @@ def recorded_alerts(key, games):
     def add(game_no, title, detail, url):
         output[game_no].append(dict(title=title, detail=detail, url=url))
 
-    for event in AlertOccurrence.objects.filter(evaluation__game_no__in=ids).select_related('evaluation'):
-        snapshot = event.snapshot
-        add(event.evaluation.game_no, snapshot.get('title', event.rule_key), snapshot.get('detail', ''),
-            reverse('alert_evidence_detail', args=[event.evaluation_id]))
-    for event in GroupAbsenceEvent.objects.filter(stream_id=key, snapshot__evaluated_round__in=ids):
-        snapshot = event.snapshot
-        add(snapshot['evaluated_round'], f'{snapshot.get("color", event.group_id)} absence',
-            f'Recorded count: {snapshot.get("count", snapshot.get("absence", "—"))}', reverse('group_absence_dashboard'))
-    for event in CategoryAlertEvent.objects.filter(rule__settings_id=key).filter(
-            Q(snapshot__evaluated_round__in=ids) | Q(resolution_snapshot__evaluated_round__in=ids)):
-        for snapshot, ended in ((event.snapshot, False), (event.resolution_snapshot, True)):
-            game_no = snapshot.get('evaluated_round')
+    def shown_fields(query, *fields):
+        # JSON key transforms otherwise decode numeric-looking round IDs into
+        # integers. Keep text identity identical to the original JSON snapshot.
+        text_fields = {field: Cast(KT(field), TextField()) for field in fields
+                       if field.startswith(('snapshot__', 'resolution_snapshot__'))}
+        return query.annotate(**text_fields).values(*fields)
+
+    # Fetch only the text fields shown here. Full evidence snapshots can contain
+    # thousands of historical rows and must not be decoded on every live poll.
+    for event in shown_fields(AlertOccurrence.objects.filter(evaluation__game_no__in=ids),
+            'evaluation__game_no', 'evaluation_id', 'rule_key', 'snapshot__title', 'snapshot__detail'):
+        add(event['evaluation__game_no'], event['snapshot__title'] or event['rule_key'], event['snapshot__detail'] or '',
+            reverse('alert_evidence_detail', args=[event['evaluation_id']]))
+    group_url, category_url = reverse('group_absence_dashboard'), reverse('category_alerts')
+    window_url, signal_url = reverse('window_alerts'), reverse('signals_dashboard')
+    for event in shown_fields(GroupAbsenceEvent.objects.filter(stream_id=key, snapshot__evaluated_round__in=ids),
+            'group_id', 'snapshot__evaluated_round', 'snapshot__color', 'snapshot__count', 'snapshot__absence'):
+        count = event['snapshot__count'] if event['snapshot__count'] is not None else event['snapshot__absence']
+        add(event['snapshot__evaluated_round'], f"{event['snapshot__color'] or event['group_id']} absence",
+            f"Recorded count: {count if count is not None else '—'}", group_url)
+    fields = ['evaluated_round', 'group_name', 'mode', 'count']
+    for event in shown_fields(CategoryAlertEvent.objects.filter(rule__settings_id=key).filter(
+            Q(snapshot__evaluated_round__in=ids) | Q(resolution_snapshot__evaluated_round__in=ids)),
+                *[f'{prefix}__{field}' for prefix in ('snapshot', 'resolution_snapshot') for field in fields]):
+        for prefix, ended in (('snapshot', False), ('resolution_snapshot', True)):
+            game_no = event[f'{prefix}__evaluated_round']
             if game_no in ids:
-                add(game_no, f'{snapshot.get("group_name", "Category")} {snapshot.get("mode", "")}'+(' ended' if ended else ''),
-                    f'Recorded count: {snapshot.get("count", "—")}', reverse('category_alerts'))
-    for event in WindowAlertEvent.objects.filter(stream_id=key, snapshot__end_round__in=ids, invalidated_at__isnull=True):
-        add(event.snapshot['end_round'], f'10-game {event.kind}', event.snapshot.get('repeated_details', ''), reverse('window_alerts'))
-    for event in SignalLog.objects.filter(game__game_no__in=ids).select_related('game', 'rule'):
-        add(event.game.game_no, event.rule.name, f'Recorded signal count: {event.value}', reverse('signals_dashboard'))
+                count = event[f'{prefix}__count']
+                add(game_no, f"{event[f'{prefix}__group_name'] or 'Category'} {event[f'{prefix}__mode'] or ''}"+(' ended' if ended else ''),
+                    f"Recorded count: {count if count is not None else '—'}", category_url)
+    for event in shown_fields(WindowAlertEvent.objects.filter(stream_id=key, snapshot__end_round__in=ids, invalidated_at__isnull=True),
+            'kind', 'snapshot__end_round', 'snapshot__repeated_details'):
+        add(event['snapshot__end_round'], f"10-game {event['kind']}", event['snapshot__repeated_details'] or '', window_url)
+    for event in SignalLog.objects.filter(game__game_no__in=ids).values('game__game_no', 'rule__name', 'value'):
+        add(event['game__game_no'], event['rule__name'], f"Recorded signal count: {event['value']}", signal_url)
     return output
 
 
@@ -130,6 +148,22 @@ def patterns(items, legend):
     return events
 
 
+def new_repeat_history(games):
+    """Classify each round against its previous ten, excluding that round."""
+    output = [None] * len(games)
+    previous, run = None, 0
+    for index in range(len(games)-1, -1, -1):
+        window = games[index:index+11]
+        reason = 'Building history' if len(window) < 11 else (
+            'History gap' if any(not adjacent(a, b) for a, b in zip(window, window[1:])) else '')
+        kind = None if reason else ('repeated' if games[index].winning_number in
+                                   {game.winning_number for game in window[1:]} else 'new')
+        run = run+1 if kind and kind == previous else (1 if kind else 0)
+        output[index] = dict(kind=kind, run=run, reason=reason)
+        previous = kind
+    return output
+
+
 def build_timeline(key, enabled=None, cutoffs=None):
     from .number_history import completed_history, number_statistics, latest_completed_unavailable
     from .group_history import group_statistics
@@ -140,11 +174,12 @@ def build_timeline(key, enabled=None, cutoffs=None):
     visible = games[:LIMIT]
     evidence = recorded_alerts(key, visible) if 'alerts' in enabled else {}
     rows = []
+    new_repeat = new_repeat_history(games)
     for index, game in enumerate(visible):
         rows.append(dict(game_no=game.game_no, number=game.winning_number,
             timestamp=game.winner_event_ts.isoformat(), url=reverse('game_detail', args=[game.game_no]),
             gap_before=index + 1 < len(games) and not adjacent(game, games[index + 1]),
-            alerts=evidence.get(game.game_no, [])))
+            alerts=evidence.get(game.game_no, []), new_repeat=new_repeat[index]))
     tracks = []
     for track_key in enabled:
         title, legend = TRACKS[track_key]

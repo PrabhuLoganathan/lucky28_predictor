@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import sqlite3
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
+from django.db import OperationalError
 from rest_framework.test import APIClient
 
 from games.models import GameRound, SignalLog, SignalRule
@@ -103,3 +105,24 @@ class LoggerApiTests(TestCase):
         GameRound.objects.create(game_no='round-1', game_type='luckyrace')
         self.assertEqual(self.event().status_code, 409)
         self.assertEqual(GameRound.objects.get().game_type, 'luckyrace')
+
+    def test_database_busy_rolls_back_and_same_event_can_retry(self):
+        def locked(*args):
+            cause = sqlite3.OperationalError('database is locked')
+            cause.sqlite_errorcode = sqlite3.SQLITE_BUSY
+            raise OperationalError('database is locked') from cause
+
+        with patch('games.logger_api.record_live_event', side_effect=locked):
+            response = self.event(phase='winner', winning_number=0, status=3)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response['Retry-After'], '1')
+        self.assertFalse(response.data['accepted'])
+        self.assertFalse(GameRound.objects.exists())
+        self.assertEqual(self.event(phase='winner', winning_number=0, status=3).status_code, 200)
+        self.assertTrue(self.event(phase='winner', winning_number=0, status=3).data['duplicate'])
+        self.assertEqual(GameRound.objects.count(), 1)
+
+    def test_unrelated_database_errors_are_not_hidden_as_busy(self):
+        with patch('games.logger_api.record_live_event', side_effect=OperationalError('no such table')):
+            with self.assertRaises(OperationalError):
+                self.event()

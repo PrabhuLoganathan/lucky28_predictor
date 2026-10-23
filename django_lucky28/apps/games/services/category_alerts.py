@@ -5,6 +5,9 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import TextField
+from django.db.models.fields.json import KT
+from django.db.models.functions import Cast
 from django.urls import reverse
 from django.utils import timezone
 
@@ -15,7 +18,7 @@ from games.models import (GameRound, GroupAbsenceStream, CategoryAlertSettings, 
 from .group_absence import locked_stream, display_time
 from .category_history import observed_suffix
 from .alerts import eligible_destinations, queue_delivery
-from .category_changes import reconcile_ending, queue_endings
+from .category_changes import reconcile_ending, queue_endings, ENDING_INVALID
 
 
 def ensure_settings(key):
@@ -89,8 +92,10 @@ def synchronize(key='lucky28', evaluate_current=True):
         return config, rules
     positions = {game.game_no: index for index, game in enumerate(history)}
     events = defaultdict(list)
-    for event in CategoryAlertEvent.objects.filter(rule__settings=config):
+    for event in CategoryAlertEvent.objects.filter(rule__settings=config).defer('snapshot').annotate(
+            evaluated_round=Cast(KT('snapshot__evaluated_round'), TextField())):
         events[event.rule_id].append(event)
+    ended_ids, invalidated_ids = [], []
     for rule in rules:
         group = CATEGORY_BY_ID[rule.group_id]
         hits = [index for index, game in enumerate(history) if game.winning_number in group.numbers]
@@ -121,7 +126,7 @@ def synchronize(key='lucky28', evaluate_current=True):
             continue
         rule.notified = False
         for event in events[rule.pk]:
-            evaluated_index = positions.get(event.snapshot['evaluated_round'], -1)
+            evaluated_index = positions.get(event.evaluated_round, -1)
             current = bool(rule.count and (evaluated_index >= start or event.period_key == rule.period_key))
             if current:
                 rule.notified = True
@@ -130,10 +135,15 @@ def synchronize(key='lucky28', evaluate_current=True):
             if resolved != event.resolved_at:
                 event.resolved_at = resolved
                 event.save(update_fields=['resolved_at'])
-            reconcile_ending(event, rule, history, positions, current, newly_resolved)
+            reconcile_ending(event, rule, history, positions, current, newly_resolved, invalidated_ids)
             if not current:
-                AlertDelivery.objects.filter(kind='category', payload__event_id=event.pk,
-                    status__in=['pending', 'failed']).update(status='cancelled', error='Category absence or streak ended.')
+                ended_ids.append(event.pk)
+    if ended_ids:
+        AlertDelivery.objects.filter(kind='category', payload__event_id__in=ended_ids,
+            status__in=['pending', 'failed']).update(status='cancelled', error='Category absence or streak ended.')
+    if invalidated_ids:
+        AlertDelivery.objects.filter(kind='category_end', payload__event_id__in=invalidated_ids,
+            status__in=['pending', 'failed']).update(status='cancelled', error=ENDING_INVALID)
     CategoryAlertRule.objects.bulk_update(rules, ['count', 'complete', 'lower_bound', 'last_number', 'last_round',
         'last_timestamp', 'period_start', 'period_key', 'notified'])
     if evaluate_current:

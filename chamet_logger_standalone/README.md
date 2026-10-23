@@ -20,4 +20,8 @@ npm start
 ```
 
 `npm test` runs local unit tests. `npm start` opens only the logger and expects
-Django to be running. Lucky Race automation is not part of this package.
+Django to be running. The logger joins the first available party and selects
+Lucky Number automatically, reusing the saved login. It waits for sign-in if
+needed and reopens the game after two minutes without Number Game progress.
+Use `CHAMET_AUTO_OPEN=false` for manual navigation. Lucky Race automation is not
+run; the copied `src/tests/chamet_logger.spec.ts` is excluded from the build.

@@ -17,6 +17,8 @@
   if (!Array.isArray(collapsed)) collapsed = [];
   let data, busy = false, pending = false, paused = false, page = 0, selected = null, signature = '';
   let paletteStaleMessage = '';
+  let pollTimer, feedETag='', feedKey='';
+  const pollDelay=1000;
   let focusedGroup = null, gapFamily = 'Rows', gapMode = 'current', chartGroup = null;
   let focusedNumber = read('lucky28.palette.focus');
   if (!Number.isInteger(focusedNumber) || focusedNumber < 0 || focusedNumber > 27) focusedNumber = null;
@@ -25,156 +27,97 @@
   const formatTime = value => new Date(value).toLocaleTimeString();
   const button = (text, action) => {const node = make('button', text); node.type = 'button'; node.addEventListener('click', action); return node;};
 
-  const categories = {all:'All', S:'Small · 0–13', B:'Big · 14–27', E:'Even', O:'Odd',
-    SE:'Small Even', SO:'Small Odd', BE:'Big Even', BO:'Big Odd'};
-  const categoryColors = {S:'#67b9ff',B:'#ffa762',E:'#b89aff',O:'#f38ac5',SE:'#58d9d0',SO:'#d7adff',BE:'#edcc71',BO:'#a4c8ff'};
-  const filterCatalog = new Map();
-  const addFilter = (id,label,section,color,short=label,test=null) => filterCatalog.set(id,{id,label,section,color,short,test});
-  Object.entries(categories).filter(([id])=>id!=='all').forEach(([id,label])=>addFilter(id,label,'Categories',categoryColors[id],id));
-  ['Red','Orange','Magenta','Blue','Cyan / Teal','Green','Grey'].forEach((label,i)=>addFilter(`G0${i+1}`,label,'Colors',['#ef5350','#ff9800','#e754cf','#669dff','#31c8c4','#6cca7b','#aab0bb'][i]));
-  for(let i=1;i<=4;i++) addFilter(`R0${i}`,`Row ${i}`,'Rows',['#91b8ff','#b6a1f2','#e8b985','#9bd8cd'][i-1],`R${i}`);
-  for(let i=1;i<=7;i++) addFilter(`C0${i}`,`Column ${i}`,'Columns',`hsl(${190+i*23} 65% 72%)`,`C${i}`);
-  addFilter('edges','Edges · 0–5, 22–27','Range','#e6c679','Edges');
-  addFilter('middle','Middle · 6–21','Range','#abbcd3','Middle');
-  addFilter('repeated','Repeated · 2+ hits','Appearances','#b8d18c','2+ hits',(_n,hits)=>hits>=2);
-  addFilter('single','Single · 1 hit','Appearances','#d8b8a1','1 hit',(_n,hits)=>hits===1);
-  const savedFilters = read('lucky28.palette.filters.v2');
-  let activeFilters = new Set(Array.isArray(savedFilters?.ids) ? savedFilters.ids.filter(id=>filterCatalog.has(id)) : []);
-  let matchMode = savedFilters?.mode === 'all' ? 'all' : 'any';
-  const selections = new Map();
-  let openMatches = null;
+  const numberModel = window.Lucky28Numbers;
+  const universe = Array.from({length:28},(_,n)=>n);
+  const categories = {S:'Small · 0–13',B:'Big · 14–27',E:'Even',O:'Odd',SE:'Small Even',SO:'Small Odd',BE:'Big Even',BO:'Big Odd'};
+  const memberships = new Map();
+  Object.keys(categories).forEach(key=>memberships.set(key,universe.filter(n=>
+    (!key.includes('S') || n<14) && (!key.includes('B') || n>=14) &&
+    (!key.includes('E') || n%2===0) && (!key.includes('O') || n%2===1))));
+  for(let i=0;i<4;i++) memberships.set(`R0${i+1}`,universe.filter(n=>Math.floor(n/7)===i));
+  for(let i=0;i<7;i++) memberships.set(`C0${i+1}`,universe.filter(n=>n%7===i));
+  const selections = new Map(), groupButtons = new Map();
+  let recentMembers = [], historyReady = false;
   function selectionState() {
-    const stream = el('stream').value;
-    if(!selections.has(stream)) selections.set(stream,{mode:'auto',numbers:new Set()});
+    const stream=el('stream').value;
+    if(!selections.has(stream))selections.set(stream,{mode:'auto',numbers:new Set(),target:''});
     return selections.get(stream);
   }
-  function recentNumbers() {return new Set((data?.games ?? []).slice(0,10).map(game=>game.number));}
-  const selectionToolbar = make('div',undefined,'tl-selection-toolbar');
-  const selectionStatus = make('p','Mode: Auto last 10'); selectionStatus.id='tl-selection-status'; selectionStatus.setAttribute('role','status');
-  const selectionControls = make('div',undefined,'tl-selection-controls');
-  const selectionButtons=[];
-  [['Unselect last 10','unselect'],['Restore last 10','restore'],['Select absent numbers','absent'],['Clear selection','clear']].forEach(([label,action])=>{
-    const control=button(label,()=>{
-      const state=selectionState(), recent=recentNumbers();
-      state.mode=action==='restore'?'auto':'manual';
-      if(action==='restore') state.numbers=new Set(recent);
-      if(action==='unselect') state.numbers=new Set([...state.numbers].filter(n=>!recent.has(n)));
-      if(action==='absent') state.numbers=new Set(Array.from({length:28},(_,n)=>n).filter(n=>!recent.has(n)));
-      if(action==='clear') state.numbers.clear();
-      renderPalette();
-    }); control.disabled=true; selectionButtons.push(control); selectionControls.append(control);
-  });
+  function membersFor(key) {
+    if(key==='recent')return recentMembers;
+    if(key==='absent')return historyReady?universe.filter(n=>!recentMembers.includes(n)):[];
+    return memberships.get(key)??[];
+  }
+  function toggleNumbers(members) {
+    if(!members.length)return;
+    const state=selectionState();state.mode='manual';state.numbers=numberModel.toggle(state.numbers,members);renderPalette();
+  }
+  function groupButton(key,label) {
+    const control=button('',()=>toggleNumbers(membersFor(key)));
+    control.className='tl-selection-group';control.dataset.selectionGroup=key;
+    control.append(make('span',label),make('small',''));groupButtons.set(key,{control,label});return control;
+  }
+  const selectionToolbar=make('div',undefined,'tl-selection-toolbar');
+  const selectionStatus=make('p','Mode: Auto last 10');selectionStatus.id='tl-selection-status';selectionStatus.setAttribute('role','status');
+  const selectionControls=make('div',undefined,'tl-selection-controls');
+  selectionControls.append(groupButton('recent','Last 10'),groupButton('absent','Absent in last 10'));
   selectionToolbar.append(selectionStatus,selectionControls);
-  const filterBar=make('div',undefined,'tl-palette-filters'); filterBar.setAttribute('aria-label','Filter all 28 numbers');
+  const filterBar=make('div',undefined,'tl-palette-filters');filterBar.setAttribute('aria-label','Category selection and metrics');
   const quickFilters=make('div',undefined,'tl-quick-filters');
-  quickFilters.setAttribute('role','group'); quickFilters.setAttribute('aria-label','Size and parity filters');
-  const filterButtons=new Map(), filterGaps=new Map(), filterStreaks=new Map(), advancedChecks=new Map();
-  function toggleFilter(id) {if(activeFilters.has(id)) activeFilters.delete(id); else activeFilters.add(id); savePaletteFilters();}
+  const filterGaps=new Map(),filterStreaks=new Map();
   Object.entries(categories).forEach(([key,label])=>{
-    const control=button(key==='all'?'All':key,()=>{if(key==='all') activeFilters.clear(); else {toggleFilter(key); return;} savePaletteFilters();});
-    control.title=label; control.setAttribute('aria-label',`Filter ${label}`); control.dataset.filter=key; filterButtons.set(key,control);
     const stack=make('div',undefined,'tl-filter-stack');
-    if(key!=='all') {
-      stack.style.setProperty('--filter-accent',categoryColors[key]); control.style.setProperty('--filter-accent',categoryColors[key]);
-      const streak=button('',()=>inspectGroup(key)); streak.className='tl-filter-streak'; streak.dataset.streak=key;
-      streak.append(make('span','Streak'),make('strong','N/A'),make('small','')); streak.disabled=true; filterStreaks.set(key,streak); stack.append(streak);
-    }
-    stack.append(control);
-    if(key!=='all') {
-      const gap=button('',()=>inspectGroup(key)); gap.className='tl-filter-gap'; gap.dataset.gap=key;
-      gap.append(make('span','Gap'),make('strong','N/A'),make('small','')); gap.disabled=true; filterGaps.set(key,gap); stack.append(gap);
-    }
-    quickFilters.append(stack);
+    const metric=(name,map)=>{const control=button('',()=>inspectGroup(key));control.className=`tl-filter-${name.toLowerCase()}`;
+      control.dataset[name.toLowerCase()]=key;control.append(make('span',name),make('strong','N/A'),make('small',''));map.set(key,control);return control;};
+    const control=groupButton(key,key);control.title=label;
+    stack.append(metric('Streak',filterStreaks),control,metric('Gap',filterGaps));quickFilters.append(stack);
   });
-  const resetFilters=button('Clear filters',()=>{activeFilters.clear();savePaletteFilters();}); resetFilters.className='tl-clear-filters';
-  const matchControls=make('div',undefined,'tl-match-controls'), matchButtons=new Map();
-  matchControls.setAttribute('role','group'); matchControls.setAttribute('aria-label','Filter matching');
-  [['any','Any match'],['all','All active filters']].forEach(([mode,label])=>{
-    const control=button(label,()=>{matchMode=mode;savePaletteFilters();}); control.dataset.matchMode=mode; matchButtons.set(mode,control); matchControls.append(control);
-  }); matchControls.append(resetFilters);
-  const advanced=make('details',undefined,'tl-more-filters');
-  const advancedSummary=make('summary');
-  // A code-native funnel icon remains recognizable without an emoji font.
-  const funnel=document.createElementNS('http://www.w3.org/2000/svg','svg'); funnel.setAttribute('viewBox','0 0 24 24'); funnel.setAttribute('aria-hidden','true');
-  const funnelPath=document.createElementNS(funnel.namespaceURI,'path'); funnelPath.setAttribute('d','M3 4h18l-7 8v7l-4 2v-9z'); funnel.append(funnelPath);
-  const advancedCaption=make('span','Filters (0)'); advancedSummary.append(funnel,advancedCaption); advanced.append(advancedSummary);
-  const advancedBody=make('div',undefined,'tl-advanced-options');
-  ['Colors','Rows','Columns','Range','Appearances'].forEach(section=>{
-    const fieldset=make('fieldset'); fieldset.append(make('legend',section));
-    [...filterCatalog.values()].filter(filter=>filter.section===section).forEach(filter=>{
-      const label=make('label'), check=make('input'); check.type='checkbox'; check.dataset.filterId=filter.id;
-      check.addEventListener('change',()=>toggleFilter(filter.id)); label.style.setProperty('--filter-accent',filter.color);
-      label.append(check,make('span',filter.label)); fieldset.append(label); advancedChecks.set(filter.id,check);
-    }); advancedBody.append(fieldset);
-  }); advanced.append(advancedBody);
-  const chips=make('div',undefined,'tl-filter-chips'); chips.setAttribute('aria-label','Active filters');
-  const filterSummary=make('p','Filters apply to all 28 numbers.','tl-filter-summary'); filterSummary.id='tl-filter-summary'; filterSummary.setAttribute('role','status');
-  const matchDetails=make('div',undefined,'tl-match-details'); matchDetails.id='tl-match-details'; matchDetails.hidden=true;
-  matchDetails.setAttribute('role','region');matchDetails.setAttribute('aria-label','Matching filters');
-  const matchDetailsText=make('p'); matchDetailsText.setAttribute('role','status');
-  function closeMatchDetails() {const previous=openMatches;openMatches=null;renderMatchDetails();if(previous!==null)paletteTiles[previous].querySelector('.tl-tile-inspect').focus({preventScroll:true});}
-  matchDetails.append(matchDetailsText,button('Close matches',closeMatchDetails));
-  matchDetails.addEventListener('keydown',event=>{if(event.key==='Escape')closeMatchDetails();});
-  filterBar.append(quickFilters,matchControls,advanced,chips,filterSummary,matchDetails);
+  const filterSummary=make('p','Click a group to select its members; click a fully selected group to clear it.','tl-filter-summary');filterSummary.id='tl-filter-summary';
+  filterBar.append(quickFilters,filterSummary);
   root.querySelector('.tl-palette-heading').after(selectionToolbar,filterBar);
-  root.querySelector('.tl-palette-key').textContent='Purple = last 10 · Color strips = filter matches · Gold border = inspecting';
-  function syncPaletteFilters() {
-    filterButtons.forEach((control,id)=>control.setAttribute('aria-pressed',String(id==='all'?activeFilters.size===0:activeFilters.has(id))));
-    advancedChecks.forEach((control,id)=>{control.checked=activeFilters.has(id);});
-    matchButtons.forEach((control,mode)=>control.setAttribute('aria-pressed',String(matchMode===mode)));
-    advancedCaption.textContent=`Filters (${activeFilters.size}) · color, row, column, range, repeats`;
-    resetFilters.disabled=activeFilters.size===0;
-    chips.replaceChildren();
-    [...filterCatalog.values()].filter(filter=>activeFilters.has(filter.id)).forEach(filter=>{
-      const chip=button(`${filter.label} ×`,()=>toggleFilter(filter.id)); chip.setAttribute('aria-label',`Remove ${filter.label} filter`);
-      chip.style.setProperty('--filter-accent',filter.color); chips.append(chip);
-    });
-  }
-  function savePaletteFilters() {write('lucky28.palette.filters.v2',{ids:[...activeFilters],mode:matchMode});syncPaletteFilters();renderPalette();}
-  function matchingFilters(number,hits) {
-    return [...filterCatalog.values()].filter(filter=>activeFilters.has(filter.id) &&
-      (filter.test ? filter.test(number,hits) : data?.group_stats?.find(group=>group.key===filter.id)?.numbers.includes(number)));
-  }
-  function qualifies(matches) {return !activeFilters.size || (matchMode==='all'?matches.length===activeFilters.size:matches.length>0);}
-  syncPaletteFilters();
-  const paletteTiles=Array.from({length:28},(_,number)=>{
-    const tile=make('div',undefined,'tl-number-tile'); tile.dataset.number=number;
-    const selectLabel=make('label',undefined,'tl-tile-select'), checkbox=make('input'); checkbox.type='checkbox'; checkbox.disabled=true;
-    checkbox.setAttribute('aria-label',`Select number ${number}`);
-    checkbox.addEventListener('change',()=>{
-      const state=selectionState(); state.mode='manual'; if(checkbox.checked) state.numbers.add(number);else state.numbers.delete(number);renderPalette();
-    }); selectLabel.append(checkbox,make('span','Select','tl-sr-only'));
-    const inspect=button('',()=>{focusedGroup=null;focusedNumber=number;write('lucky28.palette.focus',number);renderPalette();});
-    inspect.className='tl-tile-inspect'; inspect.disabled=true; inspect.append(make('strong',number),make('small','—','tl-tile-hits'));
-    const badge=make('span','Latest','tl-latest-badge'); badge.hidden=true;
-    const recent=make('span','RECENT','tl-recent-badge'); recent.hidden=true;
-    const meter=make('span',undefined,'tl-tile-meter');meter.append(make('i'));
-    const strips=make('div',undefined,'tl-match-strips');
-    const overlap=button('',()=>{openMatches=number;renderPalette();}); overlap.className='tl-overlap'; overlap.hidden=true;
-    overlap.setAttribute('aria-controls','tl-match-details');
-    overlap.addEventListener('focus',()=>{openMatches=number;renderMatchDetails();});
-    overlap.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeMatchDetails();}});
-    tile.append(selectLabel,inspect,recent,meter,strips,overlap,badge); el('palette').append(tile); return tile;
+  root.querySelector('.tl-palette-key').textContent='Purple = selected · Details opens inspection';
+  root.querySelector('.tl-palette-note').textContent='Recent hits describe the latest available completed results. Missing rounds are not evidence of absence.';
+  const paletteTiles=universe.map(number=>{
+    const tile=make('div',undefined,'tl-number-tile');tile.dataset.number=number;
+    const select=button('',()=>toggleNumbers([number]));select.className='tl-tile-toggle';
+    const resultTag=make('small',undefined,'tl-palette-result-tag');resultTag.hidden=true;
+    select.append(make('strong',number),make('small','N/A','tl-tile-hits'),resultTag);
+    const details=button('Details',()=>{focusedGroup=null;focusedNumber=number;write('lucky28.palette.focus',number);renderPalette();});
+    details.className='tl-tile-details';details.setAttribute('aria-label',`Details for number ${number}`);
+    const badge=make('span','Latest','tl-latest-badge');badge.hidden=true;
+    tile.append(select,details,badge);el('palette').append(tile);return tile;
   });
-  function renderMatchDetails() {
-    if(openMatches!==null&&!matchingFilters(openMatches,data?.number_stats.find(stat=>stat.number===openMatches)?.hits??0).length)openMatches=null;
-    matchDetails.hidden=openMatches===null;
-    paletteTiles.forEach((tile,number)=>tile.querySelector('.tl-overlap').setAttribute('aria-expanded',String(openMatches===number)));
-    if(openMatches!==null) {
-      const hits=data?.number_stats.find(stat=>stat.number===openMatches)?.hits ?? 0;
-      const matches=matchingFilters(openMatches,hits);
-      matchDetailsText.textContent=`Number ${openMatches} · ${matches.length} matching filters: ${matches.map(filter=>filter.label).join(', ') || 'None'}. Matches count conditions, not confidence.`;
-      positionMatchDetails();
-    }
+
+  const probability=make('section',undefined,'tl-probability');probability.id='tl-probability';probability.setAttribute('aria-label','Selected number probability comparison');
+  probability.append(make('h3','Selected number probability comparison'),make('p',numberModel.model.label));
+  const targetLabel=make('label','Selection target ', 'tl-target-label'),targetSelect=make('select');targetSelect.id='tl-selection-target';
+  [['','No target'],... [1,3,5,10,14].map(n=>[String(n),String(n)])].forEach(([value,label])=>{const option=make('option',label);option.value=value;targetSelect.append(option);});
+  targetSelect.addEventListener('change',()=>{selectionState().target=targetSelect.value;renderProbability();});targetLabel.append(targetSelect);
+  const targetStatus=make('p');targetStatus.id='tl-target-status';
+  const probabilityCards=make('div',undefined,'tl-probability-cards'),probabilityText=make('p');probabilityText.id='tl-probability-status';probabilityText.setAttribute('role','status');
+  const probabilityBar=make('div',undefined,'tl-probability-bar');probabilityBar.setAttribute('role','img');
+  const selectedBar=make('span'),unselectedBar=make('span');probabilityBar.append(selectedBar,unselectedBar);
+  const complement=make('details'),complementList=make('p');complement.append(make('summary','Show unselected numbers'),complementList);
+  probability.append(targetLabel,targetStatus,probabilityCards,probabilityBar,probabilityText,complement,
+    make('p',`Model ${numberModel.model.version} · Outcome coverage only. Standard odds are reference values; live payouts may differ.`,'tl-probability-note'));
+  root.querySelector('.tl-palette-layout').after(probability);
+  function renderProbability() {
+    const state=selectionState();targetSelect.value=state.target;
+    targetStatus.textContent=state.target?`Selected ${state.numbers.size} / target ${state.target}${state.numbers.size===Number(state.target)?' · target met':' · count differs from target'}`:`Selected ${state.numbers.size} / 28 · no target`;
+    try {
+      const result=numberModel.compare(state.numbers);probabilityCards.replaceChildren();probabilityBar.hidden=false;
+      [['Selected',result.selected,result.weight,result.percentage],['Unselected',result.unselected,result.otherWeight,result.otherPercentage]].forEach(([label,numbers,weight,percentage])=>{
+        const card=make('div',undefined,'tl-probability-card');card.dataset.side=label.toLowerCase();
+        card.append(make('h4',`${label} · ${numbers.length} numbers`),make('strong',`${percentage}%`),make('p',`Weight ${weight} / 1,000`));
+        if(label==='Selected')card.append(make('p',numbers.join(', ')||'None','tl-selected-list'));probabilityCards.append(card);
+      });
+      selectedBar.style.width=`${result.percentage}%`;unselectedBar.style.width=`${result.otherPercentage}%`;
+      probabilityBar.setAttribute('aria-label',`Selected ${result.percentage}%; unselected ${result.otherPercentage}%`);
+      const difference=result.weight-result.otherWeight,sign=difference>0?'+':'';
+      probabilityText.textContent=`Selected coverage is ${difference===0?'equal':difference<0?'lower':'higher'}: ${result.percentage}% versus ${result.otherPercentage}%. Difference ${sign}${difference} weight / ${sign}${(difference/10).toFixed(2)} percentage points.`;
+      complementList.textContent=result.unselected.join(', ')||'None';
+    } catch(error) {probabilityCards.replaceChildren();probabilityBar.hidden=true;complementList.textContent='Unavailable';probabilityText.textContent=error.message;}
   }
-  function positionMatchDetails() {
-    if(openMatches===null||matchDetails.hidden)return;
-    const anchor=paletteTiles[openMatches].querySelector('.tl-overlap').getBoundingClientRect();
-    matchDetails.style.left=`${Math.max(12,Math.min(anchor.left,window.innerWidth-matchDetails.offsetWidth-12))}px`;
-    const height=matchDetails.offsetHeight;
-    matchDetails.style.top=`${Math.max(12,Math.min(anchor.bottom+8,window.innerHeight-height-12))}px`;
-  }
-  document.addEventListener('scroll',positionMatchDetails,true);window.addEventListener('resize',positionMatchDetails);
 
   const board=el('palette'), scroller=make('div',undefined,'tl-board-scroller'), frame=make('div',undefined,'tl-board-frame');
   scroller.tabIndex=0;scroller.setAttribute('aria-label','Number board; scroll horizontally to see all columns and metrics'); board.before(scroller);scroller.append(frame);
@@ -188,7 +131,12 @@
       [[gaps,boardGaps,'Gap'],[streaks,boardStreaks,'Streak']].forEach(([container,map,metric])=>{
         const marker=button('',()=>inspectGroup(key));marker.className=`tl-board-metric tl-board-${metric.toLowerCase()}`;
         marker.dataset.group=key;marker.dataset.metric=metric.toLowerCase();marker.disabled=true;
-        marker.append(make('span',`${prefix}${i}`),make('strong','N/A'),make('small',''));map.set(key,marker);container.append(marker);
+        marker.append(make('span',`${prefix}${i}`),make('strong','N/A'),make('small',''));map.set(key,marker);
+        if(metric==='Gap') {
+          const stack=make('div',undefined,'tl-axis-group');
+          marker.querySelector('span').textContent='Gap';
+          stack.append(marker,groupButton(key,`${prefix}${i}`));container.append(stack);
+        } else container.append(marker);
       });
     }
   });
@@ -202,7 +150,115 @@
     const label=make('strong',`${key[0]}${Number(key.slice(1))}`),gap=make('span'),streak=make('span');
     control.append(label,gap,streak);compactCells.set(key,{control,gap,streak});compactSummary.append(control);
   });
-  scroller.after(make('p','Scroll the board sideways on smaller screens. All row and column metrics are also listed below.','tl-board-hint'),compactSummary);
+  const summaryDisclosure=make('details',undefined,'tl-summary-disclosure');summaryDisclosure.id='tl-row-column-summary';
+  summaryDisclosure.append(make('summary','Row & column summary'),compactSummary);probability.after(summaryDisclosure);
+  const boardHint=make('p','Scroll the board sideways to see all columns and metrics.','tl-board-hint');boardHint.hidden=true;
+  const recentStrip=el('recent-results');scroller.after(recentStrip);recentStrip.after(boardHint);
+  const updateBoardHint=()=>{boardHint.hidden=scroller.scrollWidth<=scroller.clientWidth+1;};
+  const boardObserver=new ResizeObserver(updateBoardHint);boardObserver.observe(scroller);boardObserver.observe(frame);
+
+  // Reuse round buttons across polls so keyboard focus stays on the same round.
+  const recentModes=['Number','Size','Parity','Combination'];
+  // Match the timeline's category colors even when those tracks are hidden.
+  const recentCategoryLegends={
+    Size:[['S','Small','#38bdf8'],['B','Big','#34d399']],
+    Parity:[['E','Even','#a78bfa'],['O','Odd','#fb923c']],
+    Combination:[['SE','Small Even','#38bdf8'],['SO','Small Odd','#fbbf24'],['BE','Big Even','#a78bfa'],['BO','Big Odd','#34d399']]
+  };
+  let recentMode=0,recentSnapshot=[],recentStream=null,recentFocused=null,recentRecord=null;
+  const recentNodes=new Map(),recentHeading=make('div',undefined,'tl-recent-heading');
+  const recentCaption=make('span','Newest →','tl-recent-caption');
+  const recentView=button('View: Number ↻',cycleRecentView);recentView.id='tl-recent-view';
+  const recentDetails=button('Game details',()=>{recentInfo.hidden=!recentInfo.hidden;updateRecentDetails();});recentDetails.id='tl-recent-details';
+  recentDetails.setAttribute('aria-controls','tl-recent-info');recentDetails.setAttribute('aria-expanded','false');
+  recentHeading.append(recentCaption,recentView,recentDetails);
+  const recentChips=make('div',undefined,'tl-recent-chips');recentChips.setAttribute('role','group');recentChips.setAttribute('aria-label','Recent results; activate a circle to cycle all results through number, size, parity and combination');
+  const recentNotice=make('p',undefined,'tl-recent-notice');recentNotice.id='tl-recent-notice';
+  const recentInfo=make('div',undefined,'tl-recent-info');recentInfo.id='tl-recent-info';recentInfo.hidden=true;
+  const recentInfoText=make('p'),recentLink=make('a');recentLink.className='tl-recent-round-link';recentInfo.append(recentInfoText,recentLink);
+  const recentLegend=make('div',undefined,'tl-recent-legend');recentLegend.setAttribute('aria-label','Recent result color key');
+  recentStrip.replaceChildren(recentHeading,recentChips,recentLegend,recentNotice,recentInfo);
+  function recentColors() {
+    if(recentMode===0)return (data?.stream===el('stream').value?data.group_stats??[]:[])
+      .filter(group=>group.family==='Colors').map(group=>({key:group.key,label:group.label,color:group.color,numbers:group.numbers}));
+    const track=['number','size','parity','combo'][recentMode];
+    return recentCategoryLegends[recentModes[recentMode]].map(([key,label,color])=>({key,label,
+      color:data?.tracks?.find(item=>item.tracker_key===track)?.legend.find(item=>item.letter===key)?.color??color}));
+  }
+  function resultTagText(game,isLatest) {
+    const observation=game?.new_repeat,kind=observation?.kind;
+    const label=kind==='new'?'New':kind==='repeated'?'Repeated':observation?.reason||'Building history';
+    return label+(isLatest&&kind?` · ${kind==='new'?'N':'R'}×${observation.run}`:'');
+  }
+  function recentClassification(game) {
+    const size=game.number<14?'S':'B',parity=game.number%2===0?'E':'O';
+    return {size,parity,combo:size+parity};
+  }
+  function focusRecent(game) {recentFocused=game.game_no;recentRecord=game;updateRecentDetails();}
+  function updateRecentDetails() {
+    recentDetails.disabled=!recentRecord;
+    recentDetails.setAttribute('aria-expanded',String(!recentInfo.hidden));
+    if(!recentRecord){recentInfo.hidden=true;recentDetails.setAttribute('aria-expanded','false');recentInfoText.textContent='';recentLink.removeAttribute('href');return;}
+    const {size,parity,combo}=recentClassification(recentRecord);
+    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
+    recentLink.textContent=`Open round #${recentRecord.game_no} ↗`;recentLink.href=recentRecord.url;
+    recentDetails.title=`Details for round #${recentRecord.game_no}`;
+  }
+  function cycleRecentView() {recentMode=(recentMode+1)%recentModes.length;renderRecent(recentSnapshot);}
+  function renderRecent(recent) {
+    const stream=el('stream').value;
+    if(recentStream!==stream){recentFocused=null;recentRecord=null;recentInfo.hidden=true;recentStream=stream;recentNodes.clear();recentChips.replaceChildren();}
+    recentSnapshot=recent;
+    recentView.textContent=`View: ${recentModes[recentMode]} ↻`;recentView.disabled=!recent.length;
+    recentView.setAttribute('aria-label',`View: ${recentModes[recentMode]}. Switch to ${recentModes[(recentMode+1)%recentModes.length]}`);
+    recentView.setAttribute('aria-controls','tl-recent-results');
+    recentCaption.textContent=`Newest → · ${recent.length} ${recent.length===1?'result':'results'}`;
+    const active=document.activeElement,focusedId=recentChips.contains(active)?active.dataset.round:null,scrollLeft=recentChips.scrollLeft;
+    const colors=recentColors();
+    recentLegend.replaceChildren(...colors.map(item=>{
+      const entry=make('span'),swatch=make('i');swatch.style.backgroundColor=item.color;swatch.setAttribute('aria-hidden','true');
+      entry.append(swatch,document.createTextNode(recentMode===0?item.label:`${item.key} · ${item.label}`));
+      if(item.numbers)entry.title=item.numbers.join(', ');return entry;
+    }));
+    recentLegend.hidden=!recent.length;
+    const ids=new Set(recent.map(game=>game.game_no));
+    recentNodes.forEach((node,id)=>{if(!ids.has(id)){node.remove();recentNodes.delete(id);}});
+    recent.forEach((game,index)=>{
+      let control=recentNodes.get(game.game_no);
+      if(!control){
+        control=button('',()=>{focusRecent(control.roundRecord);cycleRecentView();});control.className='tl-recent-chip';control.dataset.round=game.game_no;
+        control.append(make('span',undefined,'tl-recent-circle'),make('small',undefined,'tl-new-repeat'));
+        control.addEventListener('focus',()=>focusRecent(control.roundRecord));recentNodes.set(game.game_no,control);
+      }
+      control.roundRecord=game;
+      const {size,parity,combo}=recentClassification(game),label=[game.number,size,parity,combo][recentMode];
+      const colorGroup=colors.find(item=>recentMode===0?item.numbers.includes(game.number):item.key===label);
+      control.style.setProperty('--recent-color',colorGroup?.color??'#aab0bb');
+      control.dataset.colorGroup=colorGroup?.key??'unknown';
+      control.firstChild.textContent=label;
+      const observation=game.new_repeat,kind=observation?.kind;
+      const badge=control.querySelector('.tl-new-repeat');
+      badge.textContent=resultTagText(game,index===0);
+      badge.dataset.kind=kind??'unknown';
+      badge.title=kind?'Compared with the ten completed rounds before this result.':'Ten continuous prior results are required.';
+      control.classList.toggle('is-latest',index===0);control.classList.toggle('has-gap',Boolean(game.gap_before));
+      control.title=`${index===0?'Newest · ':''}#${game.game_no} · Number ${game.number} · ${size} · ${parity} · ${combo} · ${colorGroup?.label??'Color unavailable'} · ${formatTime(game.timestamp)} · ${badge.textContent}${game.gap_before?' · history gap before this round':''}`;
+      control.setAttribute('aria-label',`${control.title}. Showing ${recentModes[recentMode]} ${label}. Activate to show ${recentModes[(recentMode+1)%recentModes.length]} for all results.`);
+      // Inserting a new round leaves unchanged nodes in place.
+      if(recentChips.children[index]!==control)recentChips.insertBefore(control,recentChips.children[index]??null);
+    });
+    if(focusedId){const target=recentNodes.get(focusedId)??recentView;if(document.activeElement!==target)target.focus({preventScroll:true});}
+    recentChips.scrollLeft=scrollLeft;
+    if(recentFocused)recentRecord=recent.find(game=>game.game_no===recentFocused)??recentRecord;
+    if(!recentRecord && recent.length)focusRecent(recent[0]);
+    updateRecentDetails();
+    recentNotice.textContent=!recent.length?'Recent history unavailable.':[
+      paletteStaleMessage?'Last loaded results · updates unavailable':'',
+      recent.some(game=>game.gap_before)?'History gaps marked · latest available completed results':''
+    ].filter(Boolean).join(' · ');
+    recentNotice.hidden=!recentNotice.textContent;
+  }
+
 
   const analytics = make('section', undefined, 'tl-gap-analytics'); analytics.id = 'tl-gap-analytics';
   analytics.setAttribute('aria-label','Gap analytics');
@@ -242,7 +298,7 @@
   [['desc','Largest gap first'],['asc','Smallest gap first'],['natural','Natural order']].forEach(([value,label])=>{const option=make('option',label);option.value=value;sortSelect.append(option);});
   sortSelect.value=['desc','asc','natural'].includes(read('lucky28.gaps.sort'))?read('lucky28.gaps.sort'):'desc';
   sortSelect.addEventListener('change',()=>{write('lucky28.gaps.sort',sortSelect.value);renderGaps();});sortLabel.append(sortSelect);
-  const chartNote = make('p','Gaps count saved completed games, independently of palette filters. 0 = appeared in the latest result. + = not seen in available history. * = missing or unverified rounds; observed count only. Averages and maxima exclude intervals marked *.','tl-gap-note');
+  const chartNote = make('p','Gaps count saved completed games, independently of number selection. 0 = appeared in the latest result. + = not seen in available history. * = missing or unverified rounds; observed count only. Averages and maxima exclude intervals marked *.','tl-gap-note');
   gapPanel.append(modeControls,sortLabel,groupSelectLabel,chartTitle,chartScale,chart,chartNote);
   analytics.append(analyticsTitle,analyticsStatus,tabList,gapPanel);
   root.querySelector('.tl-palette-section').after(analytics);
@@ -262,7 +318,8 @@
   }
   const extremaNote=make('p',undefined,'tl-extrema-note');filterSummary.before(extremaNote);
   const metricHelp='Gap counts observed completed games since an appearance. Streak counts consecutive matches ending at the latest completed result. * means missing or unverified rounds; a streak stops at that boundary. + means available history limits the count. N/A means the latest completed result is unavailable. MAX observed compares known counts only.';
-  compactSummary.after(make('p',metricHelp,'tl-metric-help'));
+  const metricDisclosure=make('details',undefined,'tl-metric-disclosure');
+  metricDisclosure.append(make('summary','How gaps and streaks work'),make('p',metricHelp,'tl-metric-help'));summaryDisclosure.after(metricDisclosure);
   function paintMetric(control,group,metric,comparison,populated) {
     const value=metricValue(group,metric),high=comparison.keys.has(group?.key);
     control.querySelector('strong').textContent=value;control.querySelector('small').textContent=high?comparison.label:'';
@@ -352,80 +409,62 @@
       panel.append(link,make('p',new Date(last.timestamp).toLocaleString()));
     } else panel.append(make('p',`Not seen in ${data.observed_games} saved completed games.`));
     panel.append(make('p',`${group.total_hits} appearances · ${group.exact_gap_count} verified completed gaps. ${metricHelp}`));
-    const apply = button('Apply palette filter', () => {
-      activeFilters.add(group.key);savePaletteFilters();
-    }); apply.className = 'tl-group-apply';
-    panel.append(apply,make('p','Adds this group to active filters across all 28 numbers. Selection and gap counts stay unchanged.'));
     const historyButton = button('View gap history ↓', () => {gapMode = 'history'; chartGroup = group.key; gapFamily = group.family; renderGaps(); analytics.scrollIntoView({behavior:'smooth',block:'start'});});
     historyButton.className = 'tl-group-apply'; panel.append(historyButton);
   }
   renderGaps();
 
-  function paletteUnavailable(message, clear = false) {
+  function paletteUnavailable(message, clear=false) {
     paletteStaleMessage=message;
-    root.querySelector('.tl-palette-section').classList.add('stale');el('palette-status').textContent=message;
-    el('palette').setAttribute('aria-busy','false');renderGaps(clear);
-    if(clear || !data || data.stream!==el('stream').value) {
-      selectionButtons.forEach(control=>{control.disabled=true;});
-      selectionStatus.textContent=`Mode: ${selectionState().mode==='auto'?'Auto last 10':'Manual'} · waiting for history`;
-      filterSummary.textContent='History unavailable · filter definitions are retained.';
-      paletteTiles.forEach(tile=>{
-        tile.querySelector('input').disabled=true;tile.querySelector('input').checked=false;tile.querySelector('.tl-tile-inspect').disabled=true;
-        tile.classList.remove('present','focused','filter-match','filtered-out','number-selected');tile.style.removeProperty('--tile-fill');
-        tile.querySelector('.tl-tile-hits').textContent='N/A';tile.querySelector('.tl-latest-badge').hidden=true;tile.querySelector('.tl-recent-badge').hidden=true;
-        tile.querySelector('.tl-match-strips').replaceChildren();tile.querySelector('.tl-overlap').hidden=true;
-        tile.querySelector('.tl-tile-meter i').style.width='0';
-      });
-      matchDetails.hidden=true;
-      el('number-detail').replaceChildren(make('h3','History unavailable'),make('p',message));el('recent-results').replaceChildren();
-    } else {renderPalette();}
+    renderPalette(clear);
   }
 
-  function renderPalette() {
-    if(!data || data.stream!==el('stream').value) return;
-    renderGaps();
-    const seen=new Set(), history=data.games.filter(game=>{if(seen.has(game.game_no))return false;seen.add(game.game_no);return true;});
-    const recent=history.slice(0,10), counts=new Map();recent.forEach(game=>counts.set(game.number,(counts.get(game.number)??0)+1));
-    const latestNumber=recent[0]?.number??null, state=selectionState();
-    if(state.mode==='auto') state.numbers=new Set(counts.keys());
-    selectionButtons.forEach(control=>{control.disabled=false;});
-    const matchesByNumber=Array.from({length:28},(_,n)=>matchingFilters(n,counts.get(n)??0));
-    const matching=matchesByNumber.map((matches,n)=>qualifies(matches)?n:null).filter(n=>n!==null);
-    selectionStatus.textContent=`Mode: ${state.mode==='auto'?'Auto last 10':'Manual'} · ${state.numbers.size} selected · ${counts.size} recent distinct · ${matching.length} filter matches${paletteStaleMessage?' · last loaded data':''}`;
-    filterSummary.textContent=`${paletteStaleMessage?'Last loaded · ':''}${activeFilters.size ? matching.length ? `${matching.length} of 28 numbers match ${matchMode==='all'?'all active filters':'any active filter'}` : `No numbers match ${matchMode==='all'?'all active filters':'any active filter'}` : 'All 28 numbers eligible · no active filters'}. Selection is unchanged by filters.`;
-    root.querySelector('.tl-palette-section').classList.toggle('stale',Boolean(paletteStaleMessage));el('palette').setAttribute('aria-busy','false');
-    el('palette-status').textContent=paletteStaleMessage || (recent.length?`Last ${recent.length} results · ${counts.size} recent distinct numbers · #${data.latest_game_id} · checked ${formatTime(data.checked_at)}`:'No completed results yet. Select numbers manually or wait for the first result.');
-    paletteTiles.forEach((tile,number)=>{
-      const hits=counts.get(number)??0,matches=matchesByNumber[number],qualified=qualifies(matches),inspected=focusedGroup===null && focusedNumber===number;
-      const checkbox=tile.querySelector('input'),inspect=tile.querySelector('.tl-tile-inspect');
-      checkbox.disabled=false;checkbox.checked=state.numbers.has(number);inspect.disabled=false;
-      tile.classList.toggle('present',hits>0);tile.classList.toggle('number-selected',state.numbers.has(number));
-      tile.classList.toggle('filter-match',qualified);tile.classList.toggle('filtered-out',!qualified);tile.classList.toggle('focused',inspected);
-      tile.dataset.matchCount=matches.length;tile.dataset.qualified=String(qualified);inspect.setAttribute('aria-pressed',String(inspected));
-      inspect.setAttribute('aria-label',`Inspect number ${number}: ${hits} hits in last ${recent.length} results${number===latestNumber?', latest result':''}`);
-      tile.querySelector('.tl-tile-hits').textContent=`${hits} ${hits===1?'hit':'hits'}`;
-      tile.querySelector('.tl-tile-meter i').style.width=`${recent.length?hits/recent.length*100:0}%`;
-      tile.querySelector('.tl-recent-badge').hidden=hits===0;tile.querySelector('.tl-latest-badge').hidden=number!==latestNumber;
-      const strips=tile.querySelector('.tl-match-strips');strips.replaceChildren();
-      matches.slice(0,3).forEach(filter=>{const strip=make('span',filter.short);strip.style.setProperty('--strip-color',filter.color);strips.append(strip);});
-      if(matches.length>3) strips.append(make('small',`+${matches.length-3} more`));
-      if(matches.length) {
-        const colors=matches.slice(0,3).map(filter=>`color-mix(in srgb, ${filter.color} ${qualified?'30':'14'}%, #201a31)`);
-        tile.style.setProperty('--tile-fill',colors.length===1?colors[0]:`linear-gradient(135deg,${colors.map((color,i)=>`${color} ${i/colors.length*100}%,${color} ${(i+1)/colors.length*100}%`).join(',')})`);
-      } else tile.style.removeProperty('--tile-fill');
-      const overlap=tile.querySelector('.tl-overlap');overlap.hidden=matches.length===0;overlap.textContent=`×${matches.length}`;
-      overlap.title=`Number ${number}: ${matches.map(filter=>filter.label).join(', ')}`;
-      overlap.setAttribute('aria-label',`Show matching filters for number ${number}: ${matches.map(filter=>filter.label).join(', ')}`);
-      overlap.setAttribute('aria-expanded',String(openMatches===number));
+  function renderPalette(clear=false) {
+    const available=!clear && data?.stream===el('stream').value;
+    renderGaps(!available);
+    const seen=new Set(),history=available?data.games.filter(game=>{if(seen.has(game.game_no))return false;seen.add(game.game_no);return true;}):[];
+    const recent=history.slice(0,10),counts=new Map();recent.forEach(game=>counts.set(game.number,(counts.get(game.number)??0)+1));
+    historyReady=recent.length>0;recentMembers=[...counts.keys()];
+    const state=selectionState(),latestNumber=recent[0]?.number??null;
+    if(state.mode==='auto' && available)state.numbers=new Set(recentMembers);
+    selectionStatus.textContent=`Mode: ${state.mode==='auto'?'Auto last 10':'Manual'} · ${state.numbers.size} selected · ${counts.size} recent distinct${paletteStaleMessage?' · '+(available?'last loaded data':'waiting for history'):''}`;
+    groupButtons.forEach(({control,label},key)=>{
+      const members=membersFor(key),count=members.filter(n=>state.numbers.has(n)).length,full=members.length>0&&count===members.length;
+      control.disabled=!members.length;control.setAttribute('aria-pressed',String(full));
+      control.querySelector('small').textContent=`${count}/${members.length}`;
+      control.setAttribute('aria-label',`${full?'Deselect':'Select'} ${label}: ${count} of ${members.length} selected`);
     });
-    renderMatchDetails();
-    const strip=el('recent-results');strip.replaceChildren();if(recent.length)strip.append(make('span','Newest →'));
-    recent.forEach(game=>{const a=make('a',game.number);a.href=game.url;a.title=`Game #${game.game_no}`;strip.append(a);});
+    root.querySelector('.tl-palette-section').classList.toggle('stale',Boolean(paletteStaleMessage));el('palette').setAttribute('aria-busy','false');
+    el('palette-status').textContent=paletteStaleMessage || (recent.length?`Last ${recent.length} available completed results · ${counts.size} distinct · #${data.latest_game_id} · checked ${formatTime(data.checked_at)}${data.has_gaps?' · history gaps marked':''}`:'History unavailable · no completed results yet. Manual selection remains available.');
+    paletteTiles.forEach((tile,number)=>{
+      const hits=counts.get(number)??0,isSelected=state.numbers.has(number),control=tile.querySelector('.tl-tile-toggle');
+      tile.classList.toggle('number-selected',isSelected);control.setAttribute('aria-pressed',String(isSelected));
+      control.setAttribute('aria-label',`${isSelected?'Deselect':'Select'} number ${number}${historyReady?`: ${hits} hits in last ${recent.length} results`:': recent history unavailable'}`);
+      tile.querySelector('.tl-tile-hits').textContent=historyReady?`${hits} ${hits===1?'hit':'hits'}`:'N/A';
+      tile.querySelector('.tl-latest-badge').hidden=number!==latestNumber;
+      // A tile represents a number: use its newest occurrence in the displayed
+      // ten, never infer New from zero hits or from manual selection.
+      const appearance=recent.find(game=>game.number===number),resultTag=tile.querySelector('.tl-palette-result-tag');
+      resultTag.hidden=!appearance;
+      resultTag.textContent=appearance?resultTagText(appearance,appearance===recent[0]):'';
+      resultTag.dataset.kind=appearance?.new_repeat?.kind??'unknown';
+      resultTag.title=appearance?`Most recent appearance in the latest ${recent.length}: #${appearance.game_no}. Compared with the ten rounds before that result.`:'';
+      if(appearance)control.setAttribute('aria-label',`${control.getAttribute('aria-label')}. ${resultTag.textContent}`);
+    });
+    renderProbability();
+    renderRecent(recent);
     const panel=el('number-detail');panel.replaceChildren();
-    if(focusedGroup && groupFor(focusedGroup)){renderGroupDetail(panel,groupFor(focusedGroup));return;}
-    if(focusedNumber===null){panel.append(make('h3','Inspect a number'),make('p','Click a number to inspect it. Use its checkbox to select it.'));return;}
-    const stat=data.number_stats.find(s=>s.number===focusedNumber);
+    if(available && focusedGroup && groupFor(focusedGroup)){renderGroupDetail(panel,groupFor(focusedGroup));return;}
+    if(focusedNumber===null){panel.append(make('h3','Number details'),make('p','Use Details below a number to inspect it. The number button changes selection.'));return;}
     panel.append(make('div',focusedNumber,'tl-number-hero'),make('h3',`Number ${focusedNumber}`));
+    try {
+      numberModel.compare([focusedNumber]);
+      const record=numberModel.model.records.find(r=>r.number===focusedNumber);
+      panel.append(make('p',`Probability weight: ${record.weight} / 1,000 · Modeled probability: ${(record.weight/10).toFixed(2)}%`),
+        make('p',`Standard odds reference: ${record.odds}. Live payouts may differ.`));
+    }catch(error){panel.append(make('p',error.message));}
+    const stat=available?data.number_stats.find(s=>s.number===focusedNumber):null;
+    if(!stat || !historyReady){panel.append(make('p','Recent appearances and gaps unavailable.'));return;}
     panel.append(make('p',`${stat.size} · ${stat.parity} · ${stat.color} · Row ${Math.floor(focusedNumber/7)+1}, Column ${focusedNumber%7+1}`));
     const metrics=make('div',undefined,'tl-number-metrics');
     [[counts.get(focusedNumber)??0,`Hits / last ${recent.length}`],[stat.current_gap===null?'N/A':`${stat.current_gap}${stat.gap_lower_bound?'+':''}`,'Observed games since seen'],[stat.max_gap??'N/A','Longest completed gap'],[stat.average_gap??'N/A','Average completed gap']].forEach(([value,label])=>{const cell=make('div');cell.append(make('strong',value),make('small',label));metrics.append(cell);});
@@ -536,31 +575,57 @@
     el('stream').value = data.streams.includes(selectedStream) ? selectedStream : 'lucky28';
   }
 
+  function markChecked(checkedAt) {
+    if(!data)return;
+    data.checked_at=checkedAt;
+    const checked=` · checked ${formatTime(checkedAt)}`;
+    for(const node of [el('palette-status'),el('gap-status')])if(node)node.textContent=node.textContent.replace(/ · checked [^·]+/,checked+' ');
+    status(`${paused ? 'Paused' : 'Live · checks every 1s'}${checked} · latest ${data.latest_game_id ? '#'+data.latest_game_id : 'waiting'}${data.has_gaps?' · history gaps marked':''}`);
+  }
   async function fetchData() {
     if (busy) {pending = true; return;}
+    clearTimeout(pollTimer);
     busy = true;
+    let failed=false;
+    const startedAt=performance.now();
     const requestedStream = el('stream').value;
     const requestedTracks = enabled === null ? null : enabled.join(',');
     try {
       const url = new URL(root.dataset.feed, location.origin); url.searchParams.set('stream', requestedStream);
       if (requestedTracks !== null) url.searchParams.set('tracks', requestedTracks);
-      const response = await fetch(url, {cache: 'no-store', signal: AbortSignal.timeout(12000)});
+      const requestKey=url.toString();
+      const headers=feedKey===requestKey && data?.stream===requestedStream && feedETag?{'If-None-Match':feedETag}:{};
+      const response = await fetch(url, {cache: 'no-store', headers, signal: AbortSignal.timeout(12000)});
+      if (requestedStream !== el('stream').value || requestedTracks !== (enabled === null ? null : enabled.join(','))) {pending = true; return;}
+      if(response.status===304 && data) {
+        const recovered=Boolean(paletteStaleMessage);paletteStaleMessage='';
+        if(recovered)renderPalette();
+        markChecked(response.headers.get('X-Timeline-Checked-At')||new Date().toISOString());return;
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const next = await response.json();
       if (requestedStream !== el('stream').value || requestedTracks !== (enabled === null ? null : enabled.join(','))) {pending = true; return;}
       if (enabled === null) {enabled = next.catalog.map(t => t.key); write('lucky28.timeline.tracks', enabled);}
+      const recovered=Boolean(paletteStaleMessage);
       data = next;
+      feedETag=response.headers.get('ETag')||'';feedKey=requestKey;
       paletteStaleMessage = '';
       const nextSignature = JSON.stringify([data.games, data.tracks, data.number_stats, data.group_stats, data.observed_games]);
       if (nextSignature !== signature) {render(); signature = nextSignature;}
-      else renderPalette();
-      settings();
-      status(`${paused ? 'Paused' : 'Live · checks every 5s'} · checked ${formatTime(data.checked_at)} · latest ${data.latest_game_id ? '#' + data.latest_game_id : 'waiting'}${data.has_gaps ? ' · history gaps marked' : ''}`);
+      else if(recovered)renderPalette();
+      const settingsSignature=JSON.stringify([data.catalog,data.streams,enabled]);
+      if(root.dataset.settingsSignature!==settingsSignature){settings();root.dataset.settingsSignature=settingsSignature;}
+      markChecked(data.checked_at);
     } catch (error) {
+      failed=true;
       status(`Refresh failed — ${data ? 'showing last loaded results' : 'history unavailable'}. Retrying in 5s. (${error.message})`, true);
       paletteUnavailable(data && data.stream === el('stream').value ? 'Updates unavailable · showing the last loaded palette and details.' : 'History unavailable. Retrying automatically.');
     }
-    finally {busy = false; if (pending) {pending = false; fetchData();}}
+    finally {
+      busy=false;
+      if(pending){pending=false;fetchData();}
+      else pollTimer=setTimeout(()=>{if(!paused&&!document.hidden)fetchData();},failed?5000:Math.max(100,pollDelay-(performance.now()-startedAt)));
+    }
   }
 
   async function reset(track) {
@@ -579,6 +644,7 @@
   el('prev').addEventListener('click', () => {page--; render();});
   el('next').addEventListener('click', () => {page++; render();});
   document.addEventListener('visibilitychange', () => {if (!document.hidden && !paused) fetchData();});
-  setInterval(() => {if (!paused && !document.hidden) fetchData();}, 5000);
+  root.querySelector('.tl-footnote').textContent='Checks every second while visible; unchanged responses do not redraw the page. New/Repeated compares each result with its previous ten rounds. Dashed borders mark history gaps. Alert markers show recorded events.';
+  renderPalette();
   fetchData();
 })();

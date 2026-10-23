@@ -12,10 +12,18 @@ persistent Chrome window. It reuses an already running compatible Django server.
 Press **Ctrl+C** to stop the logger and the Django process it started.
 
 You need Python 3.10+, Node.js 22+, npm, and Google Chrome installed. On first
-launch, sign in to Chamet in the new window and open **Lucky Number**. The login
+launch, sign in to Chamet in the new window. The logger automatically joins the
+first available party, opens its game menu, and chooses **Lucky Number / Lucky 28**. The login
 is kept in this project's `.local/chamet-profile`; no browser extension or paths
 to another workspace are required. Capture follows the Lucky Number console/IM
 packet formats used by the original logger and accepts readable WebSocket JSON.
+Automation waits for login when required. Once a game is opened, two minutes
+without progress in valid Number Game packets triggers navigation back through
+the room and game menu. Unrelated console messages and repeated copies of a
+frozen winner do not keep the connection healthy. Set `CHAMET_AUTO_OPEN=false`
+for manual navigation; optional party/menu/Number Game selectors are listed in
+`.env.example`. Navigation uses one native tap per control, and never clicks Play
+or places a bet.
 
 ## Commands
 
@@ -54,8 +62,9 @@ header. The logger API rejects requests without a matching token.
 | `.local/chamet/signals.jsonl` | Received signal journal |
 | `.local/legacy-chamet-logger/` | Preserved original copy, including its nested Git history and race utilities |
 
-The legacy copy is ignored by Git and is not loaded or executed. The active
-logger has no Lucky Race scripts, coordinate betting automation, screenshot
+The legacy copy is ignored by Git and is not loaded or executed. The copied
+`src/tests/chamet_logger.spec.ts` Car Game reference is excluded from the active
+TypeScript build. The active logger has no Lucky Race capture, coordinate betting automation, screenshot
 exporters, Excel utilities, or dependencies on `master_config.csv`.
 
 ## How the APIs connect
@@ -375,6 +384,12 @@ must migrate and restart the web and alert worker processes. The command
 validation, bulk controls, save/cancel persistence and desktop/mobile layouts.
 SQLite atomic transactions reserve writes before reading state, allowing the
 worker and dashboard tabs to reconcile counts without read-to-write lock conflicts.
+Category reconciliation batches delivery lookups/cancellations and reuses unchanged
+ending evidence to keep those write transactions short. If SQLite remains busy,
+logger ingestion returns HTTP 503 with `Retry-After` and rolls back the event;
+the durable logger queue retains it for retry. The logger allows 35 seconds for
+the response, exceeding SQLite's 20-second lock wait so a waiting request is not
+abandoned prematurely.
 
 ## Global 150-game alert timeline
 
@@ -398,46 +413,74 @@ games across dates, independently of the analysis date filters. Results are
 ordered by numeric round sequence when available (otherwise completion time),
 newest first, in six pages of 25 aligned columns.
 
-The **Live number palette** fixes numbers 0–27 in four rows of seven. Selection,
-recent appearances, filter matching and inspection are independent states. On a
-fresh page, **Auto last 10** checks the distinct numbers in the latest ten
-completed results. Repeats contribute multiple hits, but one selected tile.
-Click the number body to inspect it (gold border); use its checkbox to select it.
-**RECENT**, hit counts and **Latest** remain visible regardless of filtering.
+The **Live number palette** fixes numbers 0–27 in four compact rows of seven.
+Purple means selected. Click a number to toggle it; the separate **Details**
+action shows its history and theoretical weight without changing selection.
+Hits and **Latest** describe recent results independently of selection.
 
-A checkbox change enters **Manual** mode. **Unselect last 10** removes recent
-numbers from the selection and preserves selected absent numbers. **Select absent
-numbers** selects exactly the complement of the recent set; **Clear selection**
-selects nothing. Manual selection survives polling, corrections and stream
-switches in the open page. **Restore last 10** replaces it with the recent set and
-resumes Auto mode. A full browser reload starts Auto again. Separate counts show
-selected numbers, recent distinct numbers and filter matches.
+A fresh page starts in **Auto last 10**, selecting the distinct numbers in the
+latest ten available completed results. Any selection click enters **Manual**.
+The exact manual set survives polling, corrections and stream switches in the
+open page; a full reload starts Auto again. Missing history is marked, and recent
+controls are disabled when no results are available. Static selection and the
+probability comparison still work offline.
 
-Filters apply to **all 28 numbers**, including absent and unselected tiles.
-S/B/E/O/SE/SO/BE/BO toggle independently. The funnel panel adds independent color,
-row, column, range and single/repeated-hit filters; removable chips show active
-conditions. **Any match** is the default; **All active filters** qualifies only
-the intersection. A number matching one filter takes its stable accent. Multiple
-matches use colored background bands, up to three labeled strips, an **×N**
-count and **+N more** when needed. Tap or focus the badge for the complete list.
-Partial matches retain their strips in All mode. These counts describe matching
-conditions, not prediction confidence. **All** and **Clear filters** clear only
-filters. Filter choices persist across reloads; number selection does not.
+**Last 10**, **Absent in last 10**, S/B/E/O/SE/SO/BE/BO, rows R1–R4 and columns
+C1–C7 all use the same toggle rule: if every member is selected, remove the group;
+otherwise add its missing members. Outside numbers are unchanged. Counts such as
+**3/4** show partial selection; only complete groups use the selected style.
+There is no hidden ownership or intersection mode: S followed by E forms a union,
+while SE selects exactly small even numbers. Row/column selection never opens
+Details; the adjacent gap/streak metrics still open their analytics.
 
-**Gaps and current streaks** use full saved history independently of filters and
+The **Selected number probability comparison** sums integer combination weights
+under the labeled theoretical model of three independent uniform digits 0–9.
+The versioned model contains 28 records totaling 1,000 outcomes, independently of
+live history and reference payout odds. Selected and unselected cards show counts,
+weights, percentages and number lists with a neutral coverage bar. The set
+{4, 9, 13, 14, 15, 16, 18, 19} covers 462/1,000 (46.20%); its complement covers
+538/1,000 (53.80%). Targets 1, 3, 5, 10 and 14 only report count differences and
+never pick or remove numbers. Invalid values or model records produce an explicit
+calculation error. Reference odds in Details do not guarantee live payouts.
+
+**Gaps and current streaks** use full saved history independently of number
 selection. Column gaps sit above the board, row gaps to its left, row streaks to
-its right and column streaks below. Each top category filter has Streak above and
+its right and column streaks below. Each top category control has Streak above and
 Gap below. Any member appearing resets its group's gap to zero; streaks count the
 consecutive matching suffix ending at the latest completed result. Every tied
 positive maximum gap is red, and every tied positive maximum streak is green,
-compared separately within rows, columns and the eight filters. Other metric
+compared separately within rows, columns and the eight categories. Other metric
 values stay neutral. Labels say **MAX observed** when any compared count is
 uncertain; all-zero sets have no emphasis. Click a metric to inspect the group.
-**Apply palette filter** adds that group without removing other filters.
+
+The **Newest** circles sit directly below the board's bottom streak rail and
+scale evenly across the palette width. Narrow containers use two rows of five.
+Number view uses the game's seven color groups; Size, Parity and Combination
+use distinct category colors matching the timeline, with a labeled color key.
+Click a circle or **View** to cycle all results together through Number → Size →
+Parity → Combination → Number. This display setting does not change selection,
+Auto/Manual mode or probability totals. Repeated results remain separate circles;
+the newest has an outlined marker and missing-history boundaries use dashed borders.
+Focus a circle, then use **Game details** for its number, size, parity, combination,
+round ID, timestamp and round link. Live updates preserve the view and keyboard
+focus on rounds still present in the latest ten.
+
+Each Newest result and its corresponding palette tile also show **New** or
+**Repeated**. A tile uses its most recent appearance within the displayed ten;
+numbers absent from that window have no badge. These labels are independent of
+selection and the strip view. Each appearance is compared with its own previous ten
+completed rounds, excluding itself. Only the latest result shows the current
+consecutive classification run (**N×2**, **R×3**, etc.); older badges retain just
+the classification. Different repeated numbers can extend the same R run. A
+classification change resets the counter to one. **Building history** means fewer
+than ten prior rounds; **History gap** means that prior window is discontinuous.
+Unknown classifications break runs. Corrections recalculate the badges from history.
 
 On narrow screens, the board scrolls horizontally as one unit, keeping readable
-numbers and 44 px targets. A compact summary exposes all row/column gaps and
-streaks together. The inspection panel moves below the board when space is limited.
+numbers and access to every control. The scroll hint appears only when needed.
+**Row & column summary** and **How gaps and streaks work** are collapsed below
+the probability panel at all widths, keeping statistics out of the space between
+the board and Newest. The inspection panel moves below the board when space is limited.
 
 The separate **Gap analytics** panel has Rows, Columns, Size, Parity, Combos,
 Colors, and Range tabs. Current counts sit next to labels, before the bars;
@@ -470,8 +513,14 @@ and legacy signals). Select a dot for the full game ID, time, classifications,
 and evidence links. Pattern observations describe streaks, absences,
 concentration and alternation; they do not predict future results.
 
-The timeline checks for results and corrections every five seconds while the tab
-is visible. Pause/resume and manual refresh are available. Track visibility and
+The timeline checks for results and corrections every second while the tab
+is visible, without overlapping requests. Unchanged snapshots return HTTP 304
+and retain existing DOM nodes and keyboard focus. Conditional versions include
+results, corrections, alert evidence and session-specific reset state; no stale
+result cache is used. Alert evidence queries load only the fields shown in the
+timeline, instead of decoding full historical snapshots. Failed requests retry
+after five seconds. The logger drains results queued during an in-flight request
+immediately after its acknowledgement, without waiting for its retry timer. Pause/resume and manual refresh are available. Track visibility and
 collapse preferences persist in this browser. Disabled tracks are omitted from
 the feed. Each track's **Reset** hides history through the latest completed game
 for the current session and stream; **Restore history** reverses it. These actions
@@ -532,8 +581,9 @@ npm --prefix chamet_logger_standalone test
 python3 -m unittest dataFeeds.test_extract_html_data
 ```
 
-The browser integration check uses a temporary database and a local page that
-emits representative Lucky Number packets. It verifies capture, API delivery,
+The browser integration check uses a temporary database and a local party/menu
+fixture that emits Number Game packets only after automatic Lucky Number selection.
+It verifies navigation, iframe capture, API delivery,
 signal feedback, race exclusion, and process shutdown without contacting Chamet:
 
 ```bash
@@ -541,5 +591,6 @@ signal feedback, race exclusion, and process shutdown without contacting Chamet:
 ```
 
 This check needs permission to bind local ports and launch a headless Chrome
-process. A real Chamet capture session still requires signing in and opening
-Lucky Number; the live site's current packet format has not yet been verified.
+process. A real Chamet session requires signing in when the saved login expires;
+automatic navigation resumes afterwards. The local fixture cannot guarantee
+Chamet's future labels or selectors, so selector overrides are available in `.env`.

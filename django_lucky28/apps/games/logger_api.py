@@ -2,11 +2,13 @@
 
 import json
 import secrets
+import sqlite3
 from decimal import Decimal
+from functools import wraps
 
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import transaction
+from django.db import OperationalError, connection, transaction
 from rest_framework import serializers
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.exceptions import APIException
@@ -79,6 +81,22 @@ class EventConflict(APIException):
     default_detail = 'This event conflicts with a saved game.'
 
 
+def retry_busy_database(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        try:
+            return view(*args, **kwargs)
+        except OperationalError as error:
+            code = getattr(error.__cause__, 'sqlite_errorcode', None)
+            if connection.vendor != 'sqlite' or code is None or (code & 0xff) not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                raise
+            # The atomic block has already rolled back. The logger keeps its
+            # durable event and retries; never acknowledge an uncommitted result.
+            return Response({'accepted': False, 'detail': 'Database busy; retry this event.'},
+                            status=503, headers={'Retry-After': '1'})
+    return wrapped
+
+
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([LoggerPermission])
@@ -89,6 +107,7 @@ def health(request):
 @api_view(['POST'])
 @authentication_classes([])
 @permission_classes([LoggerPermission])
+@retry_busy_database
 def events(request):
     serializer = LoggerEventSerializer(data=request.data)
     if not serializer.is_valid():

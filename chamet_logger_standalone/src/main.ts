@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import { chromium, Page } from '@playwright/test';
 import { loadConfig } from './config';
 import { DjangoBridge } from './bridge';
-import { LuckyEvent, PacketCollector } from './packets';
+import { LuckyEvent, PacketCollector, normalizePacket } from './packets';
+import { NumberGameAutomation } from './navigation';
 
 async function main() {
     const config = loadConfig();
@@ -29,8 +30,11 @@ async function main() {
         headless: config.headless, viewport: config.viewport, hasTouch: true,
     });
     const collector = new PacketCollector();
+    let automation: NumberGameAutomation | undefined;
     const flush = () => bridge.flush().catch(error => console.warn(`[retry] ${error.message}`));
     const capture = (value: unknown, observedAt: string) => {
+        const packet = normalizePacket(value, observedAt);
+        if (packet) automation?.observe(packet);
         const event = collector.collect(value, observedAt);
         if (event) { bridge.enqueue(event); void flush(); }
     };
@@ -52,19 +56,24 @@ async function main() {
     context.pages().forEach(attach);
     context.on('page', attach);
     const page = context.pages()[0] || await context.newPage();
+    if (config.autoOpen) automation = new NumberGameAutomation(page, config);
     let timer: NodeJS.Timeout | undefined;
     const closed = new Promise<void>(resolve => context.once('close', () => resolve()));
-    const stop = () => { void context.close(); };
+    const stop = () => { automation?.stop(); void context.close(); };
     process.once('SIGINT', stop);
     process.once('SIGTERM', stop);
     try {
         timer = setInterval(() => void flush(), 3000);
         await flush();
         await page.goto(config.gameUrl, { waitUntil: 'domcontentloaded' });
-        console.log('Logger connected. Sign in to Chamet and open Lucky Number in this browser.');
+        console.log(config.autoOpen
+            ? 'Logger connected. Opening a party and Lucky Number automatically; sign in if prompted.'
+            : 'Logger connected. Sign in to Chamet and open Lucky Number in this browser.');
+        automation?.start();
         console.log(`UTC event queue and signal feedback: ${config.dataDir}`);
         await closed;
     } finally {
+        automation?.stop();
         if (timer) clearInterval(timer);
         await context.close();
         await flush();

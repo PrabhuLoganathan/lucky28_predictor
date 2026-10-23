@@ -23,10 +23,34 @@ def free_port():
 
 
 class Fixture(BaseHTTPRequestHandler):
+    visits = []
     def log_message(self, *args):
         pass
 
     def do_GET(self):
+        Fixture.visits.append(self.path)
+        if self.path == '/partyList':
+            # No game packets until the logger completes all navigation steps.
+            self.html('''<!doctype html><title>Local party list</title><main></main><script>
+            setTimeout(() => {
+              document.querySelector('main').innerHTML = '<button class="card">Join party</button>';
+              document.querySelector('.card').onclick = () => {
+                history.pushState({}, '', '/room');
+                document.querySelector('main').innerHTML = '<button><img alt="game" width="48" height="48"></button>';
+                document.querySelector('button').onclick = () => {
+                  document.querySelector('main').innerHTML = '<button id="race">Chamet Race</button><button id="number">Lucky Number</button>';
+                  document.querySelector('#race').onclick = () => { location.href='/race'; };
+                  document.querySelector('#number').onclick = () => {
+                    document.querySelector('main').innerHTML = '<iframe src="/number" title="Lucky Number"></iframe>';
+                  };
+                };
+              };
+            }, 500);
+            </script>''')
+            return
+        if self.path != '/number':
+            self.html('<!doctype html><title>Not Number Game</title>')
+            return
         packets = [
             {'info': {'gameNo': 'fixture-1', 'winResult': -1, 'status': 1, 'surplusSeconds': 10,
                       'numberTypeRates': [{'numberType': 'B', 'proportion': 0.6}]}},
@@ -39,6 +63,9 @@ class Fixture(BaseHTTPRequestHandler):
         page = '<!doctype html><title>Lucky Number local fixture</title><h1>Local integration check</h1><script>'
         page += f'const packets = {json.dumps(packets)};'
         page += 'packets.forEach((packet, i) => setTimeout(() => console.log(packet), 500 + i * 400));</script>'
+        self.html(page)
+
+    def html(self, page):
         body = page.encode()
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
@@ -69,7 +96,7 @@ def main():
                        LUCKY28_LOGGER_TOKEN='local-integration-test-token',
                        LUCKY28_API_URL=f'http://127.0.0.1:{port}/api/logger',
                        CHAMET_PROFILE_DIR=str(folder / 'browser'), CHAMET_DATA_DIR=str(folder / 'events'),
-                       CHAMET_GAME_URL=f'http://127.0.0.1:{fixture.server_port}',
+                       CHAMET_GAME_URL=f'http://127.0.0.1:{fixture.server_port}/partyList', CHAMET_AUTO_OPEN='true',
                        CHAMET_HEADLESS='true', CHAMET_BROWSER_CHANNEL='chrome')
             with (folder / 'backend.log').open('w+') as server_log, (folder / 'logger.log').open('w+') as logger_log:
                 try:
@@ -111,6 +138,14 @@ def main():
                     feedback = [json.loads(line) for line in signal_file.read_text().splitlines()]
                     assert len(feedback) == 1 and feedback[0]['signal']['rule__name'] == 'Two Big', feedback
                     assert not list((folder / 'events/pending').glob('*.json'))
+                    assert '/number' in Fixture.visits and '/race' not in Fixture.visits, Fixture.visits
+                    logger_log.flush()
+                    logger_log.seek(0)
+                    output = logger_log.read()
+                    assert 'Joined the first available party' in output, output
+                    assert 'Opened the game menu' in output, output
+                    assert 'Lucky Number capture is live' in output, output
+                    print('PASS: automatic party -> game menu -> Lucky Number iframe; Race is never opened.')
                     print('PASS: browser console/IM packets -> authenticated Django API -> UTC games -> signal feedback.')
                     print('PASS: Lucky Race packet ignored; real Chamet and the live database were not used.')
                 except Exception:

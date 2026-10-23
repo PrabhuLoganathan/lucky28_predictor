@@ -6,6 +6,7 @@ import path from 'node:path';
 import { DjangoBridge } from '../bridge';
 import { loadConfig, projectRoot } from '../config';
 import { normalizePacket, PacketCollector } from '../packets';
+import { NumberGameHealth } from '../navigation';
 
 const winner = { gameNo: 'game-1', winResult: 0, surplusSeconds: 0, status: 3, winnerCount: 0, winTotalEnergy: 0, openCode: '0,0,0' };
 const observed = '2026-09-07T23:59:59.000Z';
@@ -64,6 +65,29 @@ test('configuration resolves profile and data paths inside the shared project', 
     assert.equal(config.profileDir, path.join(projectRoot, '.local/chamet-profile'));
     assert.equal(config.dataDir, path.join(projectRoot, '.local/chamet'));
     assert.equal(config.apiUrl, 'http://127.0.0.1:8000/api/logger');
+    assert.equal(config.autoOpen, true);
+    assert.match(config.selectors.number, /Lucky Number/);
+    const manual = loadConfig({ LUCKY28_LOGGER_TOKEN: 'test-token', CHAMET_AUTO_OPEN: 'false', CHAMET_NUMBER_SELECTOR: '.number-option' });
+    assert.equal(manual.autoOpen, false);
+    assert.equal(manual.selectors.number, '.number-option');
+});
+
+test('automatic navigation waits for login and recovers only after Number Game progress stops', () => {
+    const health = new NumberGameHealth();
+    assert.equal(health.needsRecovery(1000000, 120000), false); // Login has no deadline.
+    health.awaiting(1000);
+    assert.equal(health.needsRecovery(120999, 120000), false);
+    assert.equal(health.needsRecovery(121000, 120000), true);
+    const event = normalizePacket(winner, observed)!;
+    assert.equal(health.observe(event, 122000), true);
+    assert.equal(health.isLive(123000, 120000), true);
+    // Repeated delivery of a frozen winner cannot hide a stalled game.
+    assert.equal(health.observe(event, 240000), false);
+    assert.equal(health.needsRecovery(242000, 120000), true);
+    health.awaiting(243000);
+    assert.equal(health.needsRecovery(244000, 120000), false);
+    assert.equal(health.observe({ ...event, game_no: 'game-2' }, 245000), true);
+    assert.equal(health.isLive(245000, 120000), true);
 });
 
 test('durable queue survives network failure and replays original UTC timestamps', async t => {
@@ -104,6 +128,23 @@ test('bad acknowledgement keeps data pending', async t => {
     assert.equal(bridge.pendingCount(), 1);
 });
 
+test('database busy keeps the durable event until a successful retry', async t => {
+    const config = temporary(t);
+    let busy = true;
+    const event = normalizePacket(winner, observed)!;
+    const bridge = new DjangoBridge(config, (async (_url: any, options: any) => busy
+        ? Response.json({ accepted: false }, { status: 503, headers: { 'Retry-After': '1' } })
+        : accepted(JSON.parse(options.body))) as typeof fetch);
+    bridge.enqueue(event);
+    await assert.rejects(bridge.flush(), /503/);
+    assert.equal(bridge.pendingCount(), 1);
+    assert.equal(bridge.failedCount(), 0);
+    busy = false;
+    await bridge.flush();
+    assert.equal(bridge.pendingCount(), 0);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(config.dataDir, 'delivered.jsonl'), 'utf8').trim()), event);
+});
+
 test('signal feedback is recorded once across delivery retries and restarts', async t => {
     const config = temporary(t);
     const send = (async (_url: any, options: any) => accepted(JSON.parse(options.body), [{ id: 7, rule__name: 'Two Big', value: 2 }])) as typeof fetch;
@@ -115,4 +156,25 @@ test('signal feedback is recorded once across delivery retries and restarts', as
     const signals = fs.readFileSync(path.join(config.dataDir, 'signals.jsonl'), 'utf8').trim().split('\n');
     assert.equal(signals.length, 1);
     assert.equal(JSON.parse(signals[0]).signal.id, 7);
+});
+
+test('events queued during an in-flight send are delivered without waiting for the retry timer', async t => {
+    const config = temporary(t);
+    const delivered: string[] = [];
+    let bridge: DjangoBridge;
+    const next = { ...normalizePacket(winner, observed)!, game_no: 'next-round' };
+    bridge = new DjangoBridge(config, (async (_url: any, options: any) => {
+        const body = JSON.parse(options.body);
+        delivered.push(body.game_no);
+        if (delivered.length === 1) {
+            bridge.enqueue(next);
+            await bridge.flush(); // Busy call must not lose this new work.
+        }
+        return accepted(body);
+    }) as typeof fetch);
+    bridge.enqueue(normalizePacket(winner, observed)!);
+    await bridge.flush();
+    assert.equal(delivered.length, 2);
+    assert.equal(delivered[1], 'next-round');
+    assert.equal(bridge.pendingCount(), 0);
 });

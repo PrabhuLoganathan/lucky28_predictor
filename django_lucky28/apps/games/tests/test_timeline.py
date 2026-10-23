@@ -90,7 +90,7 @@ class TimelineTests(TestCase):
         self.assertTrue(any(e['id'].startswith('alternating') for e in events))
 
     def test_saved_alert_sources_and_category_endings(self):
-        game = self.result(100, 3)
+        game = self.result(100, 3, game_no='202610230100')
         stream = GroupAbsenceStream.objects.get(pk='lucky28')
         evaluation = AlertEvaluation.objects.create(game=game, game_no=game.game_no, observed_at=self.base,
             session_started_at=self.base)
@@ -165,3 +165,39 @@ class TimelineTests(TestCase):
         self.assertEqual(third['latest_game_id'], 'R2')
         self.assertEqual(AlertEvaluation.objects.count(), 0)
         self.assertEqual(AlertDelivery.objects.count(), 0)
+
+    def test_new_repeat_compares_previous_ten_and_resets_current_run(self):
+        self.sequence([*range(10), 10, 11, 10, 11, 12])
+        rows = build_timeline('lucky28')['games']
+        self.assertEqual([(r['new_repeat']['kind'], r['new_repeat']['run']) for r in rows[:5]],
+                         [('new', 1), ('repeated', 2), ('repeated', 1), ('new', 2), ('new', 1)])
+        self.assertEqual(rows[5]['new_repeat']['reason'], 'Building history')
+        GameRound.objects.filter(game_no='R14').update(winning_number=10)
+        self.assertEqual(build_timeline('lucky28')['games'][0]['new_repeat']['run'], 3)
+        GameRound.objects.filter(game_no='R6').delete()
+        latest = build_timeline('lucky28')['games'][0]['new_repeat']
+        self.assertIsNone(latest['kind'])
+        self.assertEqual(latest['reason'], 'History gap')
+
+    def test_conditional_poll_skips_body_but_detects_corrections_and_alert_edits(self):
+        self.sequence(range(15))
+        url = '/api/trackers/live/'
+        first = self.client.get(url)
+        tag = first['ETag']
+        unchanged = self.client.get(url, HTTP_IF_NONE_MATCH=tag)
+        self.assertEqual(unchanged.status_code, 304)
+        self.assertEqual(unchanged.content, b'')
+        self.assertIn('X-Timeline-Checked-At', unchanged)
+        GameRound.objects.filter(game_no='R14').update(winning_number=0)
+        corrected = self.client.get(url, HTTP_IF_NONE_MATCH=tag)
+        self.assertEqual(corrected.status_code, 200)
+        self.assertNotEqual(corrected['ETag'], tag)
+        stream = GroupAbsenceStream.objects.get(pk='lucky28')
+        event = GroupAbsenceEvent.objects.create(stream=stream, group_id='G01', period_key='poll',
+            snapshot={'evaluated_round':'R14', 'color':'Red', 'absence':12})
+        evidence = self.client.get(url, HTTP_IF_NONE_MATCH=corrected['ETag'])
+        self.assertEqual(evidence.status_code, 200)
+        event.snapshot['absence'] = 13
+        event.save(update_fields=['snapshot'])
+        self.assertEqual(self.client.get(url, HTTP_IF_NONE_MATCH=evidence['ETag']).status_code, 200)
+        self.assertEqual(self.client.get(url+'?tracks=size', HTTP_IF_NONE_MATCH=evidence['ETag']).status_code, 200)

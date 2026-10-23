@@ -1,0 +1,22 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {model,compare,toggle}=require('../django_lucky28/apps/games/static/games/number_model');
+const all=Array.from({length:28},(_,n)=>n), enumerated=all.map(()=>0);
+for(let a=0;a<10;a++)for(let b=0;b<10;b++)for(let c=0;c<10;c++)enumerated[a+b+c]++;
+assert.deepEqual(model.records.map(r=>r.weight),enumerated);
+const odds=['1000.0','333.3','166.7','100.0','66.7','47.6','35.7','27.8','22.2','18.2','15.9','14.5','13.7','13.3'];
+model.records.forEach(r=>{assert.equal(r.weight,model.records[27-r.number].weight);assert.equal(r.odds,odds[Math.min(r.number,27-r.number)]);});
+assert.equal(compare([]).percentage,'0.00');assert.equal(compare([]).otherWeight,1000);
+assert.equal(compare(all).percentage,'100.00');assert.equal(compare(all).otherWeight,0);
+assert.equal(compare([4,9,13,14,15,16,18,19]).weight,462);
+assert.equal(compare([4,9,13,14,15,16,18,19]).otherWeight,538);
+for(const group of [all.slice(0,14),all.slice(14),all.filter(n=>n%2===0),all.filter(n=>n%2===1)])assert.equal(compare(group).weight,500);
+assert.equal(compare([0,27]).weight,2);assert.equal(compare([13,14]).weight,150);
+assert.equal(compare([0,0,13,14,14]).weight,151);
+for(let mask=0;mask<28;mask++){const r=compare(all.slice(mask));assert.equal(r.weight+r.otherWeight,1000);}
+for(const invalid of [[-1],[28],[1.5],['0'],[null],[NaN]])assert.throws(()=>compare(invalid),/Calculation error/);
+for(const records of [model.records.slice(1),[...model.records.slice(1),model.records[1]],model.records.map(r=>r.number===0?{...r,weight:2}:r),model.records.map(r=>r.number===0?{...r,odds:null}:r)])assert.throws(()=>compare([13],{...model,records}),/Calculation error/);
+let selected=toggle([],all.slice(0,7));selected=toggle(selected,[0,7,14,21]);selected=toggle(selected,all.slice(0,7));assert.deepEqual([...selected],[7,14,21]);
+selected=toggle(selected,[0,7,14,21]);assert.equal(selected.size,4);assert.equal(toggle(selected,[0,7,14,21]).size,0);
+assert.deepEqual([...toggle([0],[])],[0]);
+console.log('Probability model verified against all 1,000 digit triples; coverage, validation and overlapping toggles passed.');

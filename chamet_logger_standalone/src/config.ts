@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { navigationSelectors } from './navigation';
 
 export const projectRoot = path.resolve(__dirname, '../..');
 
@@ -13,6 +14,13 @@ export function loadConfig(env = process.env) {
     return {
         apiUrl, token,
         gameUrl: env.CHAMET_GAME_URL || 'https://webapp.chametw.com/partyList',
+        autoOpen: env.CHAMET_AUTO_OPEN !== 'false',
+        selectors: {
+            party: env.CHAMET_PARTY_SELECTOR || navigationSelectors.party,
+            menu: env.CHAMET_MENU_SELECTOR || navigationSelectors.menu,
+            number: env.CHAMET_NUMBER_SELECTOR || navigationSelectors.number,
+        },
+        staleMs: 120000,
         profileDir: resolve(env.CHAMET_PROFILE_DIR || '.local/chamet-profile'),
         dataDir: resolve(env.CHAMET_DATA_DIR || '.local/chamet'),
         channel: env.CHAMET_BROWSER_CHANNEL || 'chrome',

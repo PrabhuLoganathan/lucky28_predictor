@@ -1,4 +1,8 @@
-from django.http import JsonResponse
+import hashlib
+import json
+
+from django.core.serializers.json import DjangoJSONEncoder
+from django.http import JsonResponse, HttpResponseNotModified
 from django.shortcuts import render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -30,7 +34,14 @@ def live(request):
     data = build_timeline(key, enabled, request.session.get('timeline_cutoffs', {}).get(key, {}))
     data['catalog'] = [dict(key=k, title=v[0]) for k, v in TRACKS.items()]
     data['streams'] = available_streams()
-    return JsonResponse(data)
+    # Hash actual snapshot contents so corrections, imports, evidence changes and
+    # session-specific reset cutoffs invalidate the response without a stale cache.
+    versioned = {name: value for name, value in data.items() if name != 'checked_at'}
+    etag = '"' + hashlib.sha256(json.dumps(versioned, cls=DjangoJSONEncoder, separators=(',', ':')).encode()).hexdigest() + '"'
+    response = HttpResponseNotModified() if request.headers.get('If-None-Match') == etag else JsonResponse(data)
+    response['ETag'] = etag
+    response['X-Timeline-Checked-At'] = data['checked_at']
+    return response
 
 
 @never_cache
