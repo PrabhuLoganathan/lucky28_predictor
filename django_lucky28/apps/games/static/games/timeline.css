@@ -52,6 +52,21 @@
 @media(max-width:600px){.tl-probability{padding:12px}.tl-probability-cards{grid-template-columns:minmax(0,1fr)}.tl-selection-controls .tl-selection-group{font-size:.72rem;min-height:44px}.tl-board-frame .tl-number-tile .tl-tile-hits{font-size:.64rem}}
 
 /* Keep the recent strip attached to the board at every viewport width. */
+.tl-palette-section{container-type:inline-size;container-name:palette}
+.tl-palette-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-bottom:18px;align-items:start}
+.tl-palette-overview-controls{min-width:0}
+.tl-palette-overview .tl-palette-filters{margin-bottom:0}
+.tl-palette-overview .tl-probability{margin:0;padding:14px}
+.tl-palette-overview .tl-probability h3{font-size:.9rem;line-height:1.35}
+.tl-palette-overview .tl-probability p{font-size:.7rem;margin:6px 0;line-height:1.4}
+.tl-palette-overview .tl-target-label{font-size:.7rem;margin:8px 0 4px}
+.tl-palette-overview .tl-target-label select{min-height:36px}
+.tl-palette-overview .tl-probability-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.tl-palette-overview .tl-probability-card{padding:10px}
+.tl-palette-overview .tl-probability-card h4{font-size:.72rem}
+.tl-palette-overview .tl-probability-card>strong{font-size:1.4rem}
+.tl-palette-overview .tl-probability details{font-size:.7rem}
+@container palette (min-width:760px){.tl-palette-overview{grid-template-columns:minmax(0,1fr) minmax(300px,36%);gap:20px}}
 .tl-palette-layout>div{min-width:0}
 .tl-recent-results{display:block;margin-top:8px;min-width:0}
 .tl-recent-heading{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px}
@@ -77,8 +92,10 @@
 .tl-summary-disclosure:not([open]) .tl-compact-metrics{display:none}
 @media(max-width:600px){.tl-recent-heading button{min-height:44px}.tl-summary-disclosure .tl-compact-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-/* Ten equally sized result circles fill the palette width; phones use two rows. */
+/* Scroll through 150 results; ten circles per row, five on narrow screens. */
 .tl-recent-results{container-type:inline-size;container-name:newest}
+.tl-recent-viewport{max-height:260px;overflow-y:auto;overflow-x:hidden;overflow-anchor:none;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-color:#8970b1 #211b30}
+.tl-recent-viewport:focus-visible{outline:2px solid #d7c1f5;outline-offset:2px}
 .tl-recent-chips{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:clamp(4px,1cqw,12px);overflow:visible;width:100%;padding:8px 0}
 .tl-recent-chip{width:100%;height:auto;aspect-ratio:1;min-width:0;min-height:0}
 .tl-recent-chip .tl-recent-circle{width:calc(100% - 6px);height:calc(100% - 6px);border:2px solid var(--recent-color,#74618f);background:color-mix(in srgb,var(--recent-color,#74618f) 30%,#191524);color:#fff;font-size:clamp(.9rem,2.4cqw,1.7rem)}

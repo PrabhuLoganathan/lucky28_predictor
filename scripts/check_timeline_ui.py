@@ -23,6 +23,16 @@ const { execFileSync } = require('child_process');
     await page.goto(base + '/alerts/timeline/');
     await expect(page.locator('#tl-status')).toContainText('Live');
     await expect(page.locator('#tl-range')).toHaveText('Games 1–25 of 150 / 150 · newest first');
+    await expect(page.locator('.tl-recent-chip')).toHaveCount(150);
+    await expect(page.locator('.tl-recent-chip').first()).toHaveAttribute('data-round','R159');
+    await expect(page.locator('.tl-recent-chip').last()).toHaveAttribute('data-round','R10');
+    const viewport=page.locator('#tl-recent-viewport');
+    expect(await viewport.evaluate(n=>n.scrollHeight>n.clientHeight&&n.clientHeight<=260)).toBe(true);
+    await page.locator('.tl-recent-chip').last().scrollIntoViewIfNeeded();
+    await expect(page.locator('.tl-recent-chip').last()).toBeInViewport();
+    await expect(page.locator('#tl-recent-newest')).toBeEnabled();
+    await page.locator('#tl-recent-newest').click();
+    expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
     await expect(page.locator('tr[data-track]')).toHaveCount(11);
     await expect(page.locator('tr[data-track="size"] .tl-dot')).toHaveCount(25);
     await page.locator('tr[data-track="size"] .tl-dot').first().click();
@@ -52,9 +62,21 @@ const { execFileSync } = require('child_process');
     await expect(page.locator('#tl-status')).toContainText('Live');
     await expect(page.locator('tr[data-track="column"]')).toHaveCount(0);
     await page.evaluate(() => window.timelinePageMarker = 'same document');
+    const anchorBefore=await viewport.evaluate(n=>{
+      n.scrollTop=400;
+      const top=n.getBoundingClientRect().top;
+      const anchor=[...n.querySelectorAll('.tl-recent-chip')].find(c=>c.getBoundingClientRect().bottom>top);
+      return {id:anchor.dataset.round,offset:anchor.getBoundingClientRect().top-top};
+    });
     execFileSync(process.env.TIMELINE_TEST_PYTHON, ['django_lucky28/manage.py', 'shell', '-c',
       'from games.models import GameRound; from django.utils import timezone; GameRound.objects.create(game_no="R160", game_type="lucky28", winning_number=27, has_winner=True, status=3, winner_event_ts=timezone.now())'], {stdio:'pipe'});
     await expect(page.locator('#tl-status')).toContainText('#R160', {timeout:12000});
+    await expect(page.locator('.tl-recent-chip')).toHaveCount(150);
+    const anchorAfter=await viewport.evaluate((n,id)=>n.querySelector(`[data-round="${id}"]`).getBoundingClientRect().top-n.getBoundingClientRect().top,anchorBefore.id);
+    expect(Math.abs(anchorAfter-anchorBefore.offset)).toBeLessThan(2);
+    await page.locator('#tl-recent-newest').click();
+    expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
+    await expect(page.locator('.tl-recent-chip').last()).toHaveAttribute('data-round','R11');
     await expect(page.locator('#tl-range')).toContainText('of 150 / 150');
     if (await page.evaluate(() => window.timelinePageMarker) !== 'same document') throw new Error('Polling reloaded the page');
     await page.getByRole('button', {name:'Pause', exact:true}).click();
@@ -130,7 +152,7 @@ const { execFileSync } = require('child_process');
     // No duplicate statistics or explanation sits between the board and Newest.
     expect(await page.locator('.tl-board-scroller').evaluate(n=>n.nextElementSibling.id)).toBe('tl-recent-results');
     await expect(page.locator('.tl-compact-metrics')).toBeHidden();
-    expect(await page.locator('#tl-probability').evaluate(n=>n.nextElementSibling.id)).toBe('tl-row-column-summary');
+    expect(await page.locator('.tl-palette-layout').evaluate(n=>n.nextElementSibling.id)).toBe('tl-row-column-summary');
 
     await expect(page.locator('#tl-palette input,.tl-overlap,.tl-match-strips,.tl-match-controls')).toHaveCount(0);
     await group('recent').click();expect(await selectedNumbers()).toEqual([]);
@@ -166,12 +188,12 @@ const { execFileSync } = require('child_process');
     await inspect(27);expect(await selectedNumbers()).toEqual([13,14]);await expect(page.locator('#tl-number-detail')).toContainText('Standard odds reference: 1000.0');await expect(tile(27)).not.toHaveClass(/focused|number-selected/);
     for(const target of [1,3,5,10,14]){await page.selectOption('#tl-selection-target',String(target));await expect(page.locator('#tl-target-status')).toContainText(`Selected 2 / target ${target}`);expect(await selectedNumbers()).toEqual([13,14]);}
     await recentView.click();await page.locator('[data-round="P5"]').focus();
-    const scrollBeforeUpdate=await page.evaluate(()=>window.scrollY);
     const manualComparison=await comparison();append('palette','P10',20);
     await expect(tile(20)).toContainText('1 hit',{timeout:12000});expect(await selectedNumbers()).toEqual([13,14]);expect(await comparison()).toEqual(manualComparison);
     await expect(recentView).toHaveText('View: Size ↻');await expect(page.locator('[data-round="P5"]')).toBeFocused();
-    expect(Math.abs(await page.evaluate(()=>window.scrollY)-scrollBeforeUpdate)).toBeLessThan(3);
-    await expect(recentChips.first()).toHaveAttribute('data-round','P10');await expect(recentChips).toHaveCount(10);
+    // Short histories can grow another row; the round retains keyboard focus.
+    expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
+    await expect(recentChips.first()).toHaveAttribute('data-round','P10');await expect(recentChips).toHaveCount(11);
     expect((await recentLabels())[0]).toBe('B');
     await group('recent').click();await expect(page.locator('#tl-selection-status')).toContainText('Mode: Manual');
     expect(await selectedNumbers()).toEqual([4,9,13,14,15,18,19,20]);
@@ -180,6 +202,7 @@ const { execFileSync } = require('child_process');
     await clear();await select(22);
     await page.selectOption('#tl-stream','streak');await expect(page.locator('#tl-status')).toContainText('#S3');
     await expect(page.locator('.tl-recent-caption')).toHaveText('Newest → · 4 results');await expect(recentChips).toHaveCount(4);
+    expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
     await expect(recentView).toHaveText('View: Size ↻');
     await expect(page.locator('.tl-board-gap')).toHaveCount(11);await expect(page.locator('.tl-board-streak')).toHaveCount(11);
     await expect(page.locator('[data-streak]')).toHaveCount(8);await expect(page.locator('[data-gap]')).toHaveCount(8);
@@ -228,6 +251,17 @@ const { execFileSync } = require('child_process');
     const tileHeight=(await tile(2).boundingBox()).height;expect(tileHeight).toBeLessThanOrEqual(110);
     for(const width of [768,390]){
       await page.setViewportSize({width,height:900});
+      const overview=await page.locator('.tl-palette-overview').boundingBox();
+      const probabilityBox=await page.locator('#tl-probability').boundingBox();
+      const controlsBox=await page.locator('.tl-palette-overview-controls').boundingBox();
+      const paletteLayoutBox=await page.locator('.tl-palette-layout').boundingBox();
+      expect(probabilityBox.y+probabilityBox.height).toBeLessThanOrEqual(paletteLayoutBox.y);
+      if(overview.width>=760){
+        expect(probabilityBox.x).toBeGreaterThan(controlsBox.x+controlsBox.width);
+        expect(Math.abs(probabilityBox.y-controlsBox.y)).toBeLessThan(1);
+      }else{
+        expect(probabilityBox.y).toBeGreaterThan(controlsBox.y+controlsBox.height);
+      }
       if(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth))throw Error('Page overflows narrow screen');
       await expect(page.locator('.tl-compact-metrics')).toBeHidden();
       const boardPosition=await page.locator('.tl-board-scroller').boundingBox(),recentPosition=await page.locator('#tl-recent-results').boundingBox();
@@ -251,6 +285,13 @@ const { execFileSync } = require('child_process');
     await page.locator('.tl-board-scroller').evaluate(node=>node.scrollLeft=0);
     // Long, history-limited and interrupted runs must fit the mobile metric rails.
     seed('wide','W',Array(999).fill(0));await refresh();await page.selectOption('#tl-stream','wide');
+    await expect(recentChips).toHaveCount(150);
+    await recentChips.last().scrollIntoViewIfNeeded();await expect(recentChips.last()).toBeInViewport();
+    const olderRound=await recentChips.last().getAttribute('data-round');
+    await recentChips.last().click();await expect(recentChips.last().locator('.tl-recent-circle')).toHaveText('S');
+    await page.locator('#tl-recent-details').click();await expect(page.locator('#tl-recent-info')).toContainText('#'+olderRound);
+    await page.locator('#tl-recent-newest').click();expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
+    await recentView.click();await recentView.click();await recentView.click();
     await expect(page.locator('[data-gap="B"] strong')).toHaveText('999+');
     await expect(page.locator('[data-streak="SE"] strong')).toHaveText('999+');
     const metricFits=await page.locator('[data-gap="B"] strong').evaluate(node=>node.scrollWidth<=node.clientWidth);
@@ -271,7 +312,7 @@ const { execFileSync } = require('child_process');
     await page.route('**/api/trackers/live/**',route=>route.fulfill({status:503,body:'offline'}));
     await page.getByRole('button',{name:'Refresh now',exact:true}).click();await expect(page.locator('#tl-palette-status')).toContainText('last loaded palette');
     expect(await selectedNumbers()).toEqual([0]);await expect(page.locator('#tl-gap-status')).toContainText('last loaded gap history');
-    await expect(page.locator('#tl-recent-notice')).toContainText('Last loaded results');await expect(recentChips).toHaveCount(10);
+    await expect(page.locator('#tl-recent-notice')).toContainText('Last loaded results');await expect(recentChips).toHaveCount(13);
     await page.unroute('**/api/trackers/live/**');await refresh();expect(await selectedNumbers()).toEqual([0]);
     await page.route('**/api/trackers/live/**',route=>route.fulfill({status:503,body:'offline'}));await page.reload();
     await expect(page.locator('#tl-palette-status')).toContainText('History unavailable');await expect(group('recent')).toBeDisabled();await expect(group('absent')).toBeDisabled();

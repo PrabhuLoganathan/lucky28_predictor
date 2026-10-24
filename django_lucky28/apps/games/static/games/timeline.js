@@ -100,7 +100,10 @@
   const complement=make('details'),complementList=make('p');complement.append(make('summary','Show unselected numbers'),complementList);
   probability.append(targetLabel,targetStatus,probabilityCards,probabilityBar,probabilityText,complement,
     make('p',`Model ${numberModel.model.version} · Outcome coverage only. Standard odds are reference values; live payouts may differ.`,'tl-probability-note'));
-  root.querySelector('.tl-palette-layout').after(probability);
+  const paletteOverview=make('div',undefined,'tl-palette-overview');
+  const paletteControls=make('div',undefined,'tl-palette-overview-controls');
+  selectionToolbar.before(paletteOverview);paletteControls.append(selectionToolbar,filterBar);
+  paletteOverview.append(paletteControls,probability);
   function renderProbability() {
     const state=selectionState();targetSelect.value=state.target;
     targetStatus.textContent=state.target?`Selected ${state.numbers.size} / target ${state.target}${state.numbers.size===Number(state.target)?' · target met':' · count differs from target'}`:`Selected ${state.numbers.size} / 28 · no target`;
@@ -151,7 +154,7 @@
     control.append(label,gap,streak);compactCells.set(key,{control,gap,streak});compactSummary.append(control);
   });
   const summaryDisclosure=make('details',undefined,'tl-summary-disclosure');summaryDisclosure.id='tl-row-column-summary';
-  summaryDisclosure.append(make('summary','Row & column summary'),compactSummary);probability.after(summaryDisclosure);
+  summaryDisclosure.append(make('summary','Row & column summary'),compactSummary);root.querySelector('.tl-palette-layout').after(summaryDisclosure);
   const boardHint=make('p','Scroll the board sideways to see all columns and metrics.','tl-board-hint');boardHint.hidden=true;
   const recentStrip=el('recent-results');scroller.after(recentStrip);recentStrip.after(boardHint);
   const updateBoardHint=()=>{boardHint.hidden=scroller.scrollWidth<=scroller.clientWidth+1;};
@@ -171,13 +174,20 @@
   const recentView=button('View: Number ↻',cycleRecentView);recentView.id='tl-recent-view';
   const recentDetails=button('Game details',()=>{recentInfo.hidden=!recentInfo.hidden;updateRecentDetails();});recentDetails.id='tl-recent-details';
   recentDetails.setAttribute('aria-controls','tl-recent-info');recentDetails.setAttribute('aria-expanded','false');
-  recentHeading.append(recentCaption,recentView,recentDetails);
+  const recentNewest=button('Back to newest',()=>{recentViewport.scrollTop=0;updateRecentScroll();});recentNewest.id='tl-recent-newest';
+  recentNewest.setAttribute('aria-controls','tl-recent-viewport');
+  recentHeading.append(recentCaption,recentView,recentDetails,recentNewest);
+  const recentViewport=make('div',undefined,'tl-recent-viewport');recentViewport.id='tl-recent-viewport';recentViewport.tabIndex=0;
+  recentViewport.setAttribute('role','region');recentViewport.setAttribute('aria-label','Latest 150 available results, newest first. Scroll down for older rounds and up for newer rounds.');
   const recentChips=make('div',undefined,'tl-recent-chips');recentChips.setAttribute('role','group');recentChips.setAttribute('aria-label','Recent results; activate a circle to cycle all results through number, size, parity and combination');
+  recentViewport.append(recentChips);
+  function updateRecentScroll(){recentNewest.disabled=recentViewport.scrollTop<=2;}
+  recentViewport.addEventListener('scroll',updateRecentScroll,{passive:true});
   const recentNotice=make('p',undefined,'tl-recent-notice');recentNotice.id='tl-recent-notice';
   const recentInfo=make('div',undefined,'tl-recent-info');recentInfo.id='tl-recent-info';recentInfo.hidden=true;
   const recentInfoText=make('p'),recentLink=make('a');recentLink.className='tl-recent-round-link';recentInfo.append(recentInfoText,recentLink);
   const recentLegend=make('div',undefined,'tl-recent-legend');recentLegend.setAttribute('aria-label','Recent result color key');
-  recentStrip.replaceChildren(recentHeading,recentChips,recentLegend,recentNotice,recentInfo);
+  recentStrip.replaceChildren(recentHeading,recentViewport,recentLegend,recentNotice,recentInfo);
   function recentColors() {
     if(recentMode===0)return (data?.stream===el('stream').value?data.group_stats??[]:[])
       .filter(group=>group.family==='Colors').map(group=>({key:group.key,label:group.label,color:group.color,numbers:group.numbers}));
@@ -207,13 +217,17 @@
   function cycleRecentView() {recentMode=(recentMode+1)%recentModes.length;renderRecent(recentSnapshot);}
   function renderRecent(recent) {
     const stream=el('stream').value;
-    if(recentStream!==stream){recentFocused=null;recentRecord=null;recentInfo.hidden=true;recentStream=stream;recentNodes.clear();recentChips.replaceChildren();}
+    if(recentStream!==stream){recentFocused=null;recentRecord=null;recentInfo.hidden=true;recentStream=stream;recentNodes.clear();recentChips.replaceChildren();recentViewport.scrollTop=0;}
     recentSnapshot=recent;
     recentView.textContent=`View: ${recentModes[recentMode]} ↻`;recentView.disabled=!recent.length;
     recentView.setAttribute('aria-label',`View: ${recentModes[recentMode]}. Switch to ${recentModes[(recentMode+1)%recentModes.length]}`);
     recentView.setAttribute('aria-controls','tl-recent-results');
     recentCaption.textContent=`Newest → · ${recent.length} ${recent.length===1?'result':'results'}`;
-    const active=document.activeElement,focusedId=recentChips.contains(active)?active.dataset.round:null,scrollLeft=recentChips.scrollLeft;
+    const active=document.activeElement,focusedId=recentChips.contains(active)?active.dataset.round:null;
+    const scrollTop=recentViewport.scrollTop,viewportTop=recentViewport.getBoundingClientRect().top;
+    // Anchor a visible round while new rounds shift the grid. At the top, follow live results.
+    const anchor=scrollTop>2?[...recentChips.children].find(node=>node.getBoundingClientRect().bottom>viewportTop):null;
+    const anchorOffset=anchor?anchor.getBoundingClientRect().top-viewportTop:0;
     const colors=recentColors();
     recentLegend.replaceChildren(...colors.map(item=>{
       const entry=make('span'),swatch=make('i');swatch.style.backgroundColor=item.color;swatch.setAttribute('aria-hidden','true');
@@ -248,11 +262,13 @@
       if(recentChips.children[index]!==control)recentChips.insertBefore(control,recentChips.children[index]??null);
     });
     if(focusedId){const target=recentNodes.get(focusedId)??recentView;if(document.activeElement!==target)target.focus({preventScroll:true});}
-    recentChips.scrollLeft=scrollLeft;
+    recentViewport.scrollTop=anchor?.isConnected?scrollTop+anchor.getBoundingClientRect().top-viewportTop-anchorOffset:scrollTop;
+    updateRecentScroll();
     if(recentFocused)recentRecord=recent.find(game=>game.game_no===recentFocused)??recentRecord;
     if(!recentRecord && recent.length)focusRecent(recent[0]);
     updateRecentDetails();
     recentNotice.textContent=!recent.length?'Recent history unavailable.':[
+      recent.length>10?'Scroll down for older results · up for newer results':'',
       paletteStaleMessage?'Last loaded results · updates unavailable':'',
       recent.some(game=>game.gap_before)?'History gaps marked · latest available completed results':''
     ].filter(Boolean).join(' · ');
@@ -452,7 +468,7 @@
       if(appearance)control.setAttribute('aria-label',`${control.getAttribute('aria-label')}. ${resultTag.textContent}`);
     });
     renderProbability();
-    renderRecent(recent);
+    renderRecent(history.slice(0,150));
     const panel=el('number-detail');panel.replaceChildren();
     if(available && focusedGroup && groupFor(focusedGroup)){renderGroupDetail(panel,groupFor(focusedGroup));return;}
     if(focusedNumber===null){panel.append(make('h3','Number details'),make('p','Use Details below a number to inspect it. The number button changes selection.'));return;}

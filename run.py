@@ -95,6 +95,7 @@ def main():
     parser.add_argument('--setup', action='store_true', help='Install dependencies and prepare the database, then exit.')
     parser.add_argument('--check', action='store_true', help='Check dependencies, configuration, and API connectivity.')
     parser.add_argument('--django-only', action='store_true', help='Run the dashboard without opening Chamet.')
+    parser.add_argument('--no-case-study', action='store_true', help='Do not start the separate case-study recorder.')
     parser.add_argument('--replay', type=Path, help='Send a captured JSONL file to Django without opening a browser.')
     parser.add_argument('--host')
     parser.add_argument('--port', type=int)
@@ -118,7 +119,7 @@ def main():
         run([python, ROOT / 'django_lucky28/manage.py', 'seed_alert_rules'])
         print('Setup complete. Start both services with: python3 run.py')
         return
-    django = logger = None
+    django = logger = case_study = None
     try:
         if not health(api_url, token):
             try:
@@ -138,6 +139,13 @@ def main():
             else:
                 raise RuntimeError('Django did not become ready. Check LUCKY28_API_URL and the server output.')
         print(f'Dashboard: http://{host}:{port}/', flush=True)
+        if not args.no_case_study:
+            LOCAL.mkdir(exist_ok=True)
+            with (LOCAL / 'case-study-worker.log').open('ab') as case_log:
+                case_study = subprocess.Popen([str(python), str(ROOT / 'django_lucky28/manage.py'),
+                    'case_study_worker'], cwd=ROOT, stdout=case_log, stderr=case_log,
+                    env={**os.environ, 'PYTHONUNBUFFERED': '1'})
+            print(f'Case study: http://{host}:{port}/case-study/', flush=True)
         if args.django_only:
             if django:
                 django.wait()
@@ -157,6 +165,7 @@ def main():
         print('\nStopping the logger and the Django process started by this command...')
     finally:
         stop(logger)
+        stop(case_study)
         stop(django)
 
 

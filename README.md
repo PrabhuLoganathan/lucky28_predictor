@@ -3,6 +3,10 @@
 For everyday startup, browser settings, all application features, maintenance,
 tests and troubleshooting, see [Commands and feature guide](README_COMMANDS_AND_FEATURES.md).
 
+The separate [Number case study](CASE_STUDY.md) records experimental pre-result
+rankings, result explanations, hits/misses and an exportable evidence log at
+`/case-study/`. Its recorder starts with `run.py` and writes its own database.
+
 Run the dashboard and logger together from this project:
 
 ```bash
@@ -462,7 +466,10 @@ values stay neutral. Labels say **MAX observed** when any compared count is
 uncertain; all-zero sets have no emphasis. Click a metric to inspect the group.
 
 The **Newest** circles sit directly below the board's bottom streak rail and
-scale evenly across the palette width. Narrow containers use two rows of five.
+scale evenly across the palette width. A compact vertical scroll area holds up to
+150 available results, newest first, with ten circles per row (five on narrow
+screens). Scroll down for older rounds or use **Back to newest** to return to the
+latest. The palette's automatic highlights and hit counts still use only ten results.
 Number view uses the game's seven color groups; Size, Parity and Combination
 use distinct category colors matching the timeline, with a labeled color key.
 Click a circle or **View** to cycle all results together through Number → Size →
@@ -471,7 +478,8 @@ Auto/Manual mode or probability totals. Repeated results remain separate circles
 the newest has an outlined marker and missing-history boundaries use dashed borders.
 Focus a circle, then use **Game details** for its number, size, parity, combination,
 round ID, timestamp and round link. Live updates preserve the view and keyboard
-focus on rounds still present in the latest ten.
+focus on rounds still present in the latest 150, and preserve the visible round
+while you browse older results.
 
 Each Newest result and its corresponding palette tile also show **New** or
 **Repeated**. A tile uses its most recent appearance within the displayed ten;
@@ -486,8 +494,10 @@ Unknown classifications break runs. Corrections recalculate the badges from hist
 
 On narrow screens, the board scrolls horizontally as one unit, keeping readable
 numbers and access to every control. The scroll hint appears only when needed.
-**Row & column summary** and **How gaps and streaks work** are collapsed below
-the probability panel at all widths, keeping statistics out of the space between
+The **Selected number probability comparison** sits at the top right beside the
+selection controls. On narrow screens it stacks beneath those controls, above the
+number board. **Row & column summary** and **How gaps and streaks work** are collapsed below
+the board layout at all widths, keeping statistics out of the space between
 the board and Newest. The inspection panel moves below the board when space is limited.
 
 The separate **Gap analytics** panel has Rows, Columns, Size, Parity, Combos,

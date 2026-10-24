@@ -3,9 +3,14 @@ from . import views
 from . import logger_api
 from . import alert_views
 from . import timeline_views
+from . import case_study_views
 from . import alert_management, group_views, window_views, category_views
 
 urlpatterns = [
+    path('case-study/', case_study_views.dashboard, name='case_study'),
+    path('api/case-study/', case_study_views.live, name='case_study_live'),
+    path('api/case-study/<int:case_id>/', case_study_views.detail, name='case_study_detail'),
+    path('case-study/export/', case_study_views.export, name='case_study_export'),
     path('alerts/timeline/', timeline_views.dashboard, name='alert_timeline'),
     path('api/trackers/live/', timeline_views.live, name='timeline_live'),
     path('api/trackers/<str:tracker_key>/reset/', timeline_views.reset, name='timeline_reset'),

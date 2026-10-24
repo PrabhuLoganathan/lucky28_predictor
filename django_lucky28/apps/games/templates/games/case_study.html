@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% load timeline_assets %}
+{% block title %}Number case study · Lucky28{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% timeline_asset 'games/case_study.css' %}">
+<main id="case-study" class="cs-page" data-api="{% url 'case_study_live' %}" data-detail-base="/api/case-study/" data-export="{% url 'case_study_export' %}">
+  <header class="cs-header">
+    <div>
+      <p class="cs-eyebrow">NUMBER GAME · EVIDENCE LOG</p>
+      <h1>Number case study</h1>
+      <p class="cs-muted">Recorded reasons, candidate rankings, and their actual results.</p>
+    </div>
+    <div class="cs-toolbar">
+      <label>Stream <select id="cs-stream"><option value="lucky28">lucky28</option></select></label>
+      <button id="cs-refresh" type="button">Refresh</button>
+      <a id="cs-export" href="{% url 'case_study_export' %}">Download log</a>
+    </div>
+  </header>
+  <p id="cs-status" class="cs-status" role="status" aria-live="polite">Loading the case study…</p>
+  <p class="cs-context">A recorded match explains what happened in the observed history. It does not establish why the game generated a number. Rankings are experiments; their performance is measured below.</p>
+  <div id="cs-summary" class="cs-summary" aria-label="Case study totals"></div>
+
+  <section class="cs-panel" aria-labelledby="cs-pending-title">
+    <div class="cs-section-heading"><div><p class="cs-eyebrow">BEFORE THE RESULT</p><h2 id="cs-pending-title">Recorded candidate rankings</h2></div><span id="cs-pending-count" class="cs-pill"></span></div>
+    <p class="cs-muted">A ranking qualifies for the forward test only when it was saved before the result was received. This is not proof it was available before the game's betting deadline.</p>
+    <div id="cs-pending"><p class="cs-empty">Loading recorded rankings…</p></div>
+  </section>
+
+  <section class="cs-panel" aria-labelledby="cs-performance-title">
+    <div class="cs-section-heading"><div><p class="cs-eyebrow">HITS AND MISSES</p><h2 id="cs-performance-title">Performance versus baseline</h2></div>
+      <div class="cs-mode-buttons" role="group" aria-label="Evaluation sample">
+        <button type="button" id="cs-mode-prospective" aria-pressed="true">Before receipt</button>
+        <button type="button" id="cs-mode-retrospective" aria-pressed="false">Historical review</button>
+      </div>
+    </div>
+    <p id="cs-performance-note" class="cs-muted"></p>
+    <div class="cs-table-wrap" tabindex="0" role="region" aria-label="Strategy performance table">
+      <table class="cs-table">
+        <thead><tr><th scope="col">Method</th><th scope="col">Top</th><th scope="col">Rounds</th><th scope="col">Hits / misses</th><th scope="col">Hit rate</th><th scope="col">Baseline rate</th><th scope="col">Difference</th><th scope="col">Assessment</th></tr></thead>
+        <tbody id="cs-performance"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="cs-panel" aria-labelledby="cs-cases-title">
+    <div class="cs-section-heading"><div><p class="cs-eyebrow">AFTER THE RESULT</p><h2 id="cs-cases-title">Why this number?</h2></div><span id="cs-case-count" class="cs-muted"></span></div>
+    <p class="cs-muted">Inspect the latest 150 logged cases. The download includes the full saved evidence and revision history.</p>
+    <div class="cs-cases-layout">
+      <div class="cs-case-browser">
+        <label for="cs-case-search">Find round or number</label>
+        <input id="cs-case-search" type="search" placeholder="Round ID or 0–27" autocomplete="off">
+        <label for="cs-case-mode">Evidence timing</label>
+        <select id="cs-case-mode"><option value="all">All cases</option><option value="prospective">Before receipt</option><option value="retrospective">Historical review</option><option value="late">Late record</option></select>
+        <div id="cs-cases" class="cs-cases" aria-label="Logged result cases"></div>
+      </div>
+      <article id="cs-detail" class="cs-detail" aria-label="Selected case evidence" aria-busy="false"><p class="cs-empty">Select a completed round to inspect its recorded evidence.</p></article>
+    </div>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{% timeline_asset 'games/case_study.js' %}" defer></script>{% endblock %}

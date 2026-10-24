@@ -2,6 +2,9 @@
 
 Updated: 24 October 2026. This guide describes the current Number Game application.
 For detailed alert behavior and implementation notes, see [README.md](README.md).
+For the independent Number Game recorder, reasons log and prediction experiments,
+see [Case study commands and evidence rules](CASE_STUDY.md). It starts with `run.py`;
+use `--no-case-study` to omit the recorder.
 
 ## Contents
 
@@ -288,7 +291,11 @@ within the displayed ten; absent tiles have no New/Repeated badge.
 
 ### Newest display
 
-The ten circles sit directly below the board. Click a circle or the View button
+Up to 150 result circles sit in a compact vertical scroll area directly below
+the board, newest first. Scroll down for older results and up for newer results,
+or use **Back to newest**. Live updates preserve your position when browsing
+older rounds. Palette highlights and hit counts still use the latest ten.
+Click a circle or the View button
 to cycle the whole strip through:
 
 **Number → Size → Parity → Combination → Number**.
@@ -296,9 +303,12 @@ to cycle the whole strip through:
 Number mode uses color-group colors; the other modes use distinct category
 colors. View changes do not alter selected numbers or probability totals.
 Game details provides the focused round's ID, timestamp and detail link. Narrow
-layouts use two rows of five circles; the board can scroll horizontally.
+layouts use five circles per row instead of ten; the board can scroll horizontally.
 
 ### Selected-number probability comparison
+
+The comparison appears at the top right beside the palette controls. On narrow
+screens it sits below the controls and above the number board for easy access.
 
 The panel compares the selected numbers with their complement using the stated
 model of **three independent, uniformly distributed digits 0–9**. It sums integer
