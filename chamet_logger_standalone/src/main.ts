@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { chromium, Page } from '@playwright/test';
+import { chromium, devices, Page } from '@playwright/test';
 import { loadConfig } from './config';
 import { DjangoBridge } from './bridge';
 import { LuckyEvent, PacketCollector, normalizePacket } from './packets';
@@ -28,6 +28,10 @@ async function main() {
     const context = await chromium.launchPersistentContext(config.profileDir, {
         channel: config.channel === 'chromium' ? undefined : config.channel,
         headless: config.headless, viewport: config.viewport, hasTouch: true,
+        // Apply the DevTools device-toolbar behavior directly, without its UI.
+        isMobile: config.mobileEmulation,
+        userAgent: config.mobileEmulation ? devices['Pixel 7'].userAgent : undefined,
+        args: config.devtools ? ['--auto-open-devtools-for-tabs'] : [],
     });
     const collector = new PacketCollector();
     let automation: NumberGameAutomation | undefined;

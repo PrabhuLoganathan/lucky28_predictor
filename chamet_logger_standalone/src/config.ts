@@ -25,6 +25,8 @@ export function loadConfig(env = process.env) {
         dataDir: resolve(env.CHAMET_DATA_DIR || '.local/chamet'),
         channel: env.CHAMET_BROWSER_CHANNEL || 'chrome',
         headless: env.CHAMET_HEADLESS === 'true',
+        mobileEmulation: env.CHAMET_MOBILE !== 'false',
+        devtools: env.CHAMET_HEADLESS !== 'true' && env.CHAMET_DEVTOOLS === 'true',
         viewport: {
             width: Number(env.CHAMET_VIEWPORT_WIDTH || 375),
             height: Number(env.CHAMET_VIEWPORT_HEIGHT || 667),

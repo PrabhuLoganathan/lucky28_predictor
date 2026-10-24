@@ -66,6 +66,13 @@ test('configuration resolves profile and data paths inside the shared project', 
     assert.equal(config.dataDir, path.join(projectRoot, '.local/chamet'));
     assert.equal(config.apiUrl, 'http://127.0.0.1:8000/api/logger');
     assert.equal(config.autoOpen, true);
+    assert.equal(config.gameUrl, 'https://webapp.chametw.com/partyList');
+    assert.equal(config.devtools, false);
+    assert.equal(config.mobileEmulation, true);
+    assert.equal(loadConfig({ LUCKY28_LOGGER_TOKEN: 'test-token', CHAMET_DEVTOOLS: 'true' }).devtools, true);
+    assert.equal(loadConfig({ LUCKY28_LOGGER_TOKEN: 'test-token', CHAMET_MOBILE: 'false' }).mobileEmulation, false);
+    assert.equal(loadConfig({ LUCKY28_LOGGER_TOKEN: 'test-token', CHAMET_HEADLESS: 'true' }).devtools, false);
+    assert.equal(loadConfig({ LUCKY28_LOGGER_TOKEN: 'test-token', CHAMET_DEVTOOLS: 'false' }).devtools, false);
     assert.match(config.selectors.number, /Lucky Number/);
     const manual = loadConfig({ LUCKY28_LOGGER_TOKEN: 'test-token', CHAMET_AUTO_OPEN: 'false', CHAMET_NUMBER_SELECTOR: '.number-option' });
     assert.equal(manual.autoOpen, false);

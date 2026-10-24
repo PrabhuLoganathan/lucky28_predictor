@@ -1,5 +1,8 @@
 # Lucky28 + Chamet Lucky Number logger
 
+For everyday startup, browser settings, all application features, maintenance,
+tests and troubleshooting, see [Commands and feature guide](README_COMMANDS_AND_FEATURES.md).
+
 Run the dashboard and logger together from this project:
 
 ```bash
@@ -9,6 +12,11 @@ python3 run.py
 The command uses the root `.venv`, installs missing dependencies, compiles the
 logger, applies Django migrations, waits for the authenticated API, and opens a
 persistent Chrome window. It reuses an already running compatible Django server.
+Chrome navigates to `https://webapp.chametw.com/partyList` with mobile emulation
+applied in the background (mobile user agent, viewport and touch support), so
+the DevTools panel stays closed. `CHAMET_MOBILE=false` disables mobile emulation;
+`CHAMET_DEVTOOLS=true` opens the visible panel for troubleshooting. Headless
+test sessions always disable the panel.
 Press **Ctrl+C** to stop the logger and the Django process it started.
 
 You need Python 3.10+, Node.js 22+, npm, and Google Chrome installed. On first
