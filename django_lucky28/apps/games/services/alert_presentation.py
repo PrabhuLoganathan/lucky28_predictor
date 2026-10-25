@@ -1,6 +1,7 @@
 """Render only frozen payloads; no live database reads during delivery."""
 from html import escape
 from games.group_config import label_color_groups
+from .alert_identity import group_heading
 
 
 def match_labels(match):
@@ -60,7 +61,7 @@ def format_message(payload, kind='alert', limit=4096):
 
 
 def _format_message(payload, kind='alert', limit=4096):
-    if kind in ('category', 'category_end'):
+    if kind in ('category', 'category_end', 'group_end'):
         return format_category_message(payload)
     if kind == 'window':
         return format_window_message(payload)
@@ -99,7 +100,7 @@ def format_category_message(payload):
     count = f'{"at least " if payload["lower_bound"] else ""}{payload["count"]}'
     detail = (f'Absent for {count} completed rounds.' if payload['mode'] == 'absence'
               else f'Appeared in {count} consecutive completed rounds.')
-    lines = [f'<b>GROUP {payload["mode"].upper()} ALERT</b>',
+    lines = [f'<b>{group_heading(payload, payload["mode"])}</b>',
              escape(f'{payload["group_name"]} {payload["numbers"]}'),
              escape(f'{detail} Threshold: {payload["threshold"]}.'),
              escape(f'Stream: {payload["stream"]}')]
@@ -121,12 +122,13 @@ def format_category_message(payload):
 
 def format_category_ending(payload):
     count = f'{"at least " if payload["lower_bound"] else ""}{payload["count"]}'
-    detail = (f'Absence ended after {count} missed rounds. Result {payload["ended_number"]} belongs to this group.'
+    detail = (f'Absence ended after {count} missed rounds. Result {payload["ended_number"]} returned to this group. Absence reset to 0 on this round.'
               if payload['mode'] == 'absence' else
               f'Streak ended after {count} consecutive hits. Result {payload["ended_number"]} is outside this group.')
-    lines = [f'<b>GROUP {payload["mode"].upper()} ENDED</b>',
+    lines = [f'<b>{group_heading(payload, payload["mode"], ended=True)}</b>',
              escape(f'{payload["group_name"]} {payload["numbers"]}'), escape(detail),
              escape(f'Ending round: {payload["evaluated_round"]}.'),
+             escape(f'Minimum missed rounds before return: {payload["threshold"]}.') if payload['mode'] == 'absence' else '',
              escape(f'Result time: {payload["ended_at"]}'), escape(f'Stream: {payload["stream"]}')]
     if payload.get('details_url'):
         lines.append(f'<a href="{escape(payload["details_url"], quote=True)}">Round details</a>')
@@ -139,7 +141,7 @@ def format_category_ending(payload):
 def format_group_message(payload):
     group = f'{payload["group_id"]} · {payload["color"]} group {payload["numbers"]}'
     count = f'{"at least " if payload["lower_bound"] else ""}{payload["absence"]}'
-    lines = ['<b>GROUP ABSENCE ALERT</b>', escape(group),
+    lines = [f'<b>{group_heading(payload)}</b>', escape(group),
              escape(f'Absent for {count} observed completed rounds. Threshold: {payload["threshold"]}.'),
              escape(f'Stream: {payload["stream"]}')]
     if payload['lower_bound']:

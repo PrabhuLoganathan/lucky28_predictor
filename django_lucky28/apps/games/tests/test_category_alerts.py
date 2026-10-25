@@ -430,7 +430,7 @@ class CategoryAlertTests(TestCase):
         self.assertEqual(ending.status, 'sent')
         self.assertEqual(ending.dedup_key, key)
         caption = post.call_args.kwargs['data']['caption']
-        self.assertIn('GROUP STREAK ENDED', caption)
+        self.assertIn('ROW STREAK ENDED', caption)
         self.assertIn('[14, 15, 16, 17, 18, 19, 20]', caption)
         self.assertIn('after 3 consecutive hits', caption)
         self.assertIn('Result 21 is outside this group', caption)
@@ -460,7 +460,7 @@ class CategoryAlertTests(TestCase):
         self.mark_original_sent()
         self.result(104, 21)
         local = dict(REMOTE_ADDR='127.0.0.1', HTTP_HOST='localhost')
-        self.assertContains(self.client.get('/alerts/categories/', **local), 'GROUP STREAK ENDED')
+        self.assertContains(self.client.get('/alerts/categories/', **local), 'ROW STREAK ENDED')
         data = dict(enabled='on', R03_streak_enabled='on', R03_streak_threshold='3')
         self.client.post('/alerts/categories/settings/', data, **local)
         self.assertFalse(CategoryAlertSettings.objects.get().notify_changes)

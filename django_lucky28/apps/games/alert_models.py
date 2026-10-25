@@ -99,7 +99,7 @@ class AlertDelivery(models.Model):
     dedup_key = models.CharField(max_length=180, unique=True)
     evaluation = models.ForeignKey(AlertEvaluation, null=True, blank=True, on_delete=models.SET_NULL, related_name='deliveries')
     destination = models.ForeignKey(AlertDestination, on_delete=models.PROTECT)
-    kind = models.CharField(max_length=12, choices=[('alert', 'Alert'), ('result', 'Result'), ('health', 'Health'), ('test', 'Test'), ('group', 'Group absence'), ('window', 'Recent 10 games'), ('category', 'Rows, columns and categories'), ('category_end', 'Category condition ended')])
+    kind = models.CharField(max_length=12, choices=[('alert', 'Alert'), ('result', 'Result'), ('health', 'Health'), ('test', 'Test'), ('group', 'Group absence'), ('group_end', 'Color absence ended'), ('window', 'Recent 10 games'), ('category', 'Rows, columns and categories'), ('category_end', 'Category condition ended')])
     payload = models.JSONField(default=dict)
     status = models.CharField(max_length=12, choices=STATUSES, default='pending', db_index=True)
     attempts = models.PositiveIntegerField(default=0)

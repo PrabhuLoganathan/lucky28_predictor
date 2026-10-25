@@ -77,6 +77,12 @@ def deliver_one(delivery_id):
             return True
         delivery.payload = category_payload(delivery.payload)
         AlertDelivery.objects.filter(pk=delivery.pk, status='sending').update(payload=delivery.payload)
+    if delivery.kind == 'group_end':
+        from .group_endings import delivery_gate as ending_gate
+        gate = ending_gate(delivery.payload)
+        if gate != 'ready':
+            finish(gate, available_at=now + timedelta(seconds=30), error='Color absence ending paused, expired or evidence changed.')
+            return True
     if delivery.kind == 'group':
         from .group_absence import delivery_gate, refresh_delivery_payload
         gate = delivery_gate(delivery.payload)
@@ -126,13 +132,18 @@ def deliver_one(delivery_id):
             (directory / f'{delivery.pk}.jpg').write_bytes(card)
         AlertDelivery.objects.filter(pk=delivery.pk).update(artifact_path=str(artifact))
     except OSError:
-        finish('pending' if delivery.kind in ('group', 'window', 'category', 'category_end') else 'failed',
+        finish('pending' if delivery.kind in ('group', 'group_end', 'window', 'category', 'category_end') else 'failed',
                available_at=now + timedelta(seconds=30), error='Unable to archive outgoing artifact; nothing sent.')
         return True
     if delivery.kind == 'group':
         gate = delivery_gate(delivery.payload)
         if gate != 'ready':
             finish(gate, available_at=now + timedelta(seconds=30), error='Group eligibility changed before dispatch.')
+            return True
+    if delivery.kind == 'group_end':
+        gate = ending_gate(delivery.payload)
+        if gate != 'ready':
+            finish(gate, available_at=now + timedelta(seconds=30), error='Color absence ending eligibility changed before dispatch.')
             return True
     if delivery.kind == 'window':
         gate = window_delivery_gate(delivery.payload)

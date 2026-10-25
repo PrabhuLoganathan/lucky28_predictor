@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from games.category_config import CATEGORY_BY_ID
 from games.group_config import GROUP_BY_NUMBER, GROUP_BY_ID, GROUP_BY_NAME
+from .alert_identity import group_identity, group_heading
 
 WHITE, MUTED, BG, PANEL = '#f1f5ff', '#9baec9', '#0b1120', '#152139'
 STYLES = {
@@ -36,7 +37,9 @@ def style_key(payload, kind):
 
 
 def symbol_for(payload, kind):
-    return STYLES.get(style_key(payload, kind), STYLES['alert'])[2]
+    symbol = STYLES.get(style_key(payload, kind), STYLES['alert'])[2]
+    identity = group_identity(payload) if kind in ('category', 'category_end', 'group', 'group_end') else None
+    return f'{symbol} {identity["symbol"]}' if identity else symbol
 
 
 def load_font(size, bold=False):
@@ -84,12 +87,23 @@ def card_model(payload, kind):
     focus = focus_track(payload, kind, snapshot)
     key = style_key(payload, kind)
     label, accent, _ = STYLES.get(key, STYLES['alert'])
+    absence_ended = key == 'ended' and payload.get('mode') == 'absence'
+    if absence_ended:
+        label = 'ABSENCE ENDED'
+    elif key == 'ended' and payload.get('mode') == 'streak':
+        label = 'STREAK ENDED'
     matches = payload.get('matches', [])
     primary = matches[0] if matches else {}
-    if kind in ('category', 'category_end', 'group'):
-        title = payload.get('group_name') or f'{payload.get("color", "Color")} group'
+    identity = group_identity(payload) if kind in ('category', 'category_end', 'group', 'group_end') else None
+    if identity:
+        accent = identity['accent']
+        label = group_heading(payload, payload.get('mode', 'absence'), key == 'ended')
+    if kind in ('category', 'category_end', 'group', 'group_end'):
+        title = identity['title'] if identity else payload.get('group_name') or f'{payload.get("color", "Color")} group'
         count = payload.get('count', payload.get('absence', 0))
-        metric = 'rounds before ending' if key == 'ended' else ('rounds absent' if key == 'absence' else 'consecutive rounds')
+        metric = ('missed rounds before return' if absence_ended else
+                  'consecutive hits before break' if key == 'ended' else
+                  'rounds absent' if key == 'absence' else 'consecutive rounds')
         if payload.get('lower_bound'): count = f'{count}+'
     elif kind == 'window':
         title = '10-game number window'
@@ -104,6 +118,9 @@ def card_model(payload, kind):
         count = primary.get('observed', '•') if len(matches) <= 1 else len(matches)
         metric = 'observed rounds' if len(matches) <= 1 else 'matched conditions'
     return dict(key=key, label=label, accent=accent, title=title, count=str(count), metric=metric,
+                identity=identity,
+                return_detail=(f'Returned: {payload["ended_number"]} · absence reset to 0'
+                               if absence_ended and 'ended_number' in payload else ''),
                 snapshot=snapshot, focus=focus)
 
 
@@ -115,7 +132,24 @@ def sticker(draw, center, radius, key, color):
     ink = '#111a2c'
     def points(coords): return [(x+a*radius, y+b*radius) for a, b in coords]
     def line(coords, width=6): draw.line(points(coords), fill=ink, width=max(2, int(width*radius/48)), joint='curve')
-    if key in ('absence', 'density_low'):
+    if key in ('row', 'column'):
+        # Horizontal versus vertical stripes remain distinguishable without color.
+        for offset in (-.38, 0, .38):
+            if key == 'row':
+                bounds = (x-radius*.6, y+radius*(offset-.10), x+radius*.6, y+radius*(offset+.10))
+            else:
+                bounds = (x+radius*(offset-.10), y-radius*.6, x+radius*(offset+.10), y+radius*.6)
+            draw.rounded_rectangle(bounds, radius=3, fill=ink)
+    elif key == 'combination':
+        draw.polygon(points([(0,-.65),(.65,0),(0,.65),(-.65,0)]), fill=ink)
+        line([(0,-.42),(0,.42)], 4)
+        draw.line(points([(-.4,0),(.4,0)]), fill=color, width=4)
+        draw.line(points([(0,-.4),(0,.4)]), fill=color, width=4)
+    elif key == 'color_group':
+        for a,b in [(-.28,-.28),(.28,-.28),(-.28,.28),(.28,.28)]:
+            r=radius*.20
+            draw.ellipse((x+a*radius-r,y+b*radius-r,x+a*radius+r,y+b*radius+r), fill=ink)
+    elif key in ('absence', 'density_low'):
         line([(-.4,-.55),(.4,-.55),(.3,-.2),(-.3,.2),(-.4,.55),(.4,.55),(.3,.2),(-.3,-.2),(-.4,-.55)])
         draw.polygon(points([(-.28,.43),(.28,.43),(0,.14)]), fill=ink)
     elif key == 'streak':
@@ -178,17 +212,22 @@ def render_card(payload, kind='alert', budget=2.0):
     text(1040,51,clipped(stamp,fonts[18],440),fonts[18],MUTED,'ra')
 
     draw.rounded_rectangle((32,100,1048,333),radius=24,fill=PANEL,outline='#293750',width=2)
-    sticker(draw,(111,180),53,model['key'],accent)
+    identity = model['identity']
+    sticker(draw,(111,180),53,identity['icon'] if identity else model['key'],accent)
+    if identity:
+        text(111,241,identity['badge'],bold[20],accent,'ma')
     text(194,124,model['label'],bold[20],accent)
     title_lines = card_lines(model['title'][:500],bold[34],570)
     for i,line in enumerate(title_lines[:2]): text(194,160+i*40,clipped(line,bold[34],570),bold[34])
     count_font = bold[76] if len(model['count']) < 7 else bold[34]
     text(936,151,model['count'],count_font,accent,'ma')
     text(1030,243,clipped(model['metric'],fonts[18],270),fonts[18],MUTED,'ra')
+    if model['return_detail']:
+        text(194,243,clipped(model['return_detail'],bold[20],540),bold[20],accent)
     # Board membership chips use the exact same seven colors as the web timeline.
-    members = payload.get('numbers', []) if kind in ('category','category_end','group') else []
+    members = payload.get('numbers', []) if kind in ('category','category_end','group','group_end') else []
     if members:
-        text(54,285,'WATCH',bold[20],MUTED)
+        text(54,285,'MEMBERS',bold[20],MUTED)
         for i,n in enumerate(members[:20]):
             x=161+i*41
             color=GROUP_BY_NUMBER[n].color
@@ -207,7 +246,9 @@ def render_card(payload, kind='alert', budget=2.0):
 
     round_id = str(payload.get('game_no','—'))
     text(40,355,clipped(f'ROUND  #{round_id}',bold[20],690),bold[20])
-    if 'threshold' in payload: text(1040,355,f'TRIGGER  ≥ {payload["threshold"]}',bold[20],accent,'ra')
+    if 'threshold' in payload:
+        threshold_label = 'MIN ABSENCE' if model['return_detail'] else 'TRIGGER'
+        text(1040,355,f'{threshold_label}  ≥ {payload["threshold"]}',bold[20],accent,'ra')
     y=398
     for match,titles,details in blocks:
         check()

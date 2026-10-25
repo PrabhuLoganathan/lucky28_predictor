@@ -20,22 +20,36 @@ class GroupAbsenceSettingsForm(forms.Form):
             state = by_id[group.id]
             self.initial[f'{group.id}_enabled'] = state.enabled
             self.initial[f'{group.id}_threshold'] = state.threshold
+            self.fields[f'{group.id}_ending_enabled'] = forms.BooleanField(required=False,
+                label=f'Notify when {group.name} returns after an absence',
+                widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+            self.fields[f'{group.id}_ending_threshold'] = forms.CharField(required=False,
+                label=f'{group.name} minimum missed rounds before return',
+                widget=forms.TextInput(attrs={'class': 'form-control ending-threshold',
+                    'inputmode': 'numeric', 'pattern': '[0-9]+', 'maxlength': 7, 'autocomplete': 'off'}))
+            self.initial[f'{group.id}_ending_enabled'] = state.ending_enabled
+            self.initial[f'{group.id}_ending_threshold'] = state.ending_threshold
 
     def clean(self):
         cleaned = super().clean()
         from django.core.exceptions import ValidationError
         for group in COLOR_GROUPS:
-            field = f'{group.id}_threshold'
-            try:
-                cleaned[field] = parse_threshold(cleaned.get(field), cleaned.get(f'{group.id}_enabled', False))
-            except ValidationError as error:
-                self.add_error(field, error)
+            for mode in ('', 'ending_'):
+                field = f'{group.id}_{mode}threshold'
+                try:
+                    cleaned[field] = parse_threshold(cleaned.get(field), cleaned.get(f'{group.id}_{mode}enabled', False))
+                except ValidationError as error:
+                    self.add_error(field, error)
         return cleaned
 
     def group_values(self):
         return {group.id: {'enabled': self.cleaned_data[f'{group.id}_enabled'],
-                           'threshold': self.cleaned_data[f'{group.id}_threshold']} for group in COLOR_GROUPS}
+                           'threshold': self.cleaned_data[f'{group.id}_threshold'],
+                           'ending_enabled': self.cleaned_data[f'{group.id}_ending_enabled'],
+                           'ending_threshold': self.cleaned_data[f'{group.id}_ending_threshold']} for group in COLOR_GROUPS}
 
     def group_rows(self):
         return [{'group': group, 'enabled': self[f'{group.id}_enabled'],
-                 'threshold': self[f'{group.id}_threshold']} for group in COLOR_GROUPS]
+                 'threshold': self[f'{group.id}_threshold'],
+                 'ending_enabled': self[f'{group.id}_ending_enabled'],
+                 'ending_threshold': self[f'{group.id}_ending_threshold']} for group in COLOR_GROUPS]

@@ -29,12 +29,18 @@ class GroupAbsenceState(models.Model):
     last_timestamp = models.DateTimeField(null=True)
     period_key = models.CharField(max_length=64, blank=True)
     notified = models.BooleanField(default=False)
+    complete = models.BooleanField(default=False)
+    ending_enabled = models.BooleanField(default=False)
+    ending_threshold = models.PositiveIntegerField(null=True, blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_GROUP_THRESHOLD)])
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['stream', 'group_id'], name='unique_group_stream'),
             models.CheckConstraint(condition=models.Q(threshold__isnull=True) | models.Q(threshold__gte=1, threshold__lte=MAX_GROUP_THRESHOLD), name='valid_group_threshold'),
             models.CheckConstraint(condition=models.Q(enabled=False) | models.Q(threshold__isnull=False), name='enabled_group_threshold_required'),
+            models.CheckConstraint(condition=models.Q(ending_threshold__isnull=True) | models.Q(ending_threshold__gte=1, ending_threshold__lte=MAX_GROUP_THRESHOLD), name='valid_group_ending_threshold'),
+            models.CheckConstraint(condition=models.Q(ending_enabled=False) | models.Q(ending_threshold__isnull=False), name='enabled_group_ending_threshold'),
         ]
 
 
@@ -67,3 +73,16 @@ class GroupDataIssue(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['stream', 'round_id'], name='unique_group_data_issue')]
+
+
+class GroupAbsenceEnding(models.Model):
+    stream = models.ForeignKey(GroupAbsenceStream, on_delete=models.PROTECT)
+    group_id = models.CharField(max_length=3)
+    ending_round = models.CharField(max_length=32)
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(default=timezone.now)
+    invalidated = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['stream', 'group_id', 'ending_round'],
+                                               name='unique_group_absence_ending')]

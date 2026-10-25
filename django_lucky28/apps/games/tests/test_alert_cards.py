@@ -49,6 +49,35 @@ class CardTimelineTests(TestCase):
 
 
 class CardDesignTests(SimpleTestCase):
+    def test_group_families_have_matching_clear_card_and_caption_identities(self):
+        samples = [('R03', 'ROW', 'R3', 'row'), ('C02', 'COLUMN', 'C2', 'column'),
+                   ('SE', 'COMBINATION', 'SE', 'combination'), ('G04', 'COLOR', 'G04', 'color_group')]
+        accents = set()
+        for group_id, family, badge, icon in samples:
+            with self.subTest(group_id=group_id):
+                payload = dict(group_id=group_id, group_name='Old generic name', mode='absence',
+                    change_type='ended', count=10, lower_bound=False, threshold=5,
+                    ended_number=6, evaluated_round='R12', ended_at='now', stream='lucky28',
+                    numbers=[6], details_path='/detail/R12/', matches=[])
+                kind = 'group_end' if family == 'COLOR' else 'category_end'
+                model = card_model(payload, kind)
+                self.assertEqual(model['label'], f'{family} ABSENCE ENDED')
+                self.assertEqual(model['identity']['badge'], badge)
+                self.assertEqual(model['identity']['icon'], icon)
+                self.assertIn(f'<b>{family} ABSENCE ENDED</b>', format_message(payload, kind))
+                self.assertIn('Returned: 6', model['return_detail'])
+                accents.add(model['accent'])
+                payload['mode'] = 'streak'
+                self.assertEqual(card_model(payload, kind)['label'], f'{family} STREAK ENDED')
+                self.assertEqual(card_model(payload, kind)['return_detail'], '')
+        self.assertEqual(len(accents), 4)
+
+    def test_unknown_group_retains_generic_fallback(self):
+        payload = dict(group_id='future', mode='absence', change_type='ended', count=2, matches=[])
+        model = card_model(payload, 'category_end')
+        self.assertEqual(model['label'], 'ABSENCE ENDED')
+        self.assertIsNone(model['identity'])
+
     def test_group_membership_symbols_and_ending_sticker(self):
         payload = dict(game_no='R3', group_id='R03', group_name='Row 3', mode='streak', count=2,
             timeline=[dict(number=21),dict(number=14),dict(number=20)], change_type='ended', matches=[])

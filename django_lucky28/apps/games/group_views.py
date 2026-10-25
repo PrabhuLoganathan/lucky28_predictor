@@ -8,9 +8,9 @@ from django.utils import timezone
 from .alert_management import management_access, paginated
 from .group_config import GROUP_BY_ID, MAX_GROUP_THRESHOLD
 from .group_forms import GroupAbsenceSettingsForm
-from .models import GroupAbsenceStream, GroupAbsenceChange, GroupAbsenceEvent
+from .models import GroupAbsenceStream, GroupAbsenceChange, GroupAbsenceEvent, GroupAbsenceEnding
 from .services.group_absence import synchronize, save_settings, alert_state
-from .services.alert_presentation import format_group_message
+from .services.alert_presentation import format_group_message, format_message
 
 
 def selected_stream(request):
@@ -25,7 +25,10 @@ def dashboard(request):
     history = paginated(request, GroupAbsenceEvent.objects.filter(stream=stream).order_by('-pk'))
     for event in history['page_obj']:
         event.message = format_group_message(event.snapshot)
-    return render(request, 'games/alerts/groups.html', dict(history, alert_tab='groups', stream=stream,
+    endings = list(GroupAbsenceEnding.objects.filter(stream=stream).order_by('-pk')[:30])
+    for event in endings:
+        event.message = format_message(event.snapshot, 'group_end')
+    return render(request, 'games/alerts/groups.html', dict(history, alert_tab='groups', stream=stream, endings=endings,
         streams=GroupAbsenceStream.objects.order_by('key'),
         rows=[dict(group=GROUP_BY_ID[state.group_id], state=state, status=alert_state(stream, state)) for state in states]))
 

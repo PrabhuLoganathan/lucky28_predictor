@@ -1,7 +1,7 @@
 from django.db import models
 from .alert_models import (AlertRule, AlertDestination, AlertEvaluation, AlertOccurrence, AlertDelivery, AlertRuntime, AlertSettings)
 
-from .group_models import (GroupAbsenceStream, GroupAbsenceState, GroupAbsenceChange, GroupAbsenceEvent, GroupDataIssue)
+from .group_models import (GroupAbsenceStream, GroupAbsenceState, GroupAbsenceChange, GroupAbsenceEvent, GroupDataIssue, GroupAbsenceEnding)
 
 from .window_models import WindowAlertState, WindowAlertEvent
 

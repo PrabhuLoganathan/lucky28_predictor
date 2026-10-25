@@ -617,3 +617,46 @@ UI management mutations use their forms with POST/CSRF handling. See
 
 The application describes saved outcomes and configured models. It does not
 guarantee the next winning number, and capture/analysis do not place bets.
+
+## Color-group absence endings
+
+Open `/alerts/groups/settings/` and adjust **Minimum missed rounds before return** for each
+color. The **Notify when group returns** switch is independent of the existing
+absence-in-progress switch. Both respect the stream's delivery switch and the
+existing Telegram destination/worker settings. Values are whole rounds, 1–1,000,000;
+separate bulk-fill controls populate absence and ending thresholds before Save.
+
+Example: Red's ending threshold is 100. After 164 consecutive completed results
+outside Red, number 26 arrives. One **Red absence ended — 164 missed rounds**
+notification is recorded with the returning number, ending round, configured
+threshold, and frozen global timeline. A prior absence notification is not
+required. The returning round is not included in the 164 missed rounds.
+
+Existing configured color groups initially use their saved absence thresholds
+and enabled flags for endings. Later edits are independent and audited. Saving
+settings, importing old history, or restarting does not replay old endings.
+Endings need a verified prior appearance and every intervening round. Historical
+gaps remain visible but do not block unrelated, fully verified recent periods.
+Corrections preserve original ending evidence and cancel invalid unsent messages.
+
+See **Absence ended history** on `/alerts/groups/` and **Deliveries** for status.
+The existing maximum event age applies to ending delivery. Verification commands:
+
+```sh
+.venv/bin/python django_lucky28/manage.py test games.tests.test_group_endings games.tests.test_group_absence --noinput
+.venv/bin/python scripts/check_group_endings_ui.py
+```
+
+The browser check uses a temporary database with Telegram disabled.
+
+### Recognizing alert cards
+
+Cards and Telegram captions identify the group family explicitly: **ROW ABSENCE
+ENDED**, **COLUMN ABSENCE ENDED**, **COLOR ABSENCE ENDED**, or **COMBINATION
+ABSENCE ENDED**. Rows use cyan horizontal bars and an R badge; columns use amber
+vertical bars and a C badge. Combinations use a purple diamond and their SE/SO/
+BE/BO code. Color groups use their configured color and G code. Every ending
+shows the returning number and the number of missed rounds before it returned.
+Active absence and streak notifications also carry their family name; streak
+endings remain explicitly labeled STREAK ENDED. These visual identities do not
+change trigger thresholds or result calculations.

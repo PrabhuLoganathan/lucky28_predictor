@@ -64,6 +64,11 @@ def report_issue(key, round_id, reason):
 
 
 def rebuild(stream, states):
+    from .category_history import observed_suffix
+    from .group_endings import reconcile
+    previous_round = stream.last_round
+    suffix, interrupted, blocked, _ = observed_suffix(stream.key)
+    suffix_ids = {game.game_no for game in suffix}
     games = list(stream_games(stream.key).only('game_no', 'has_winner', 'winning_number', 'status',
                                              'winner_event_ts', 'pre_event_ts', 'created_at'))
     sequences = [sequence_id(game.game_no) for game in games]
@@ -113,6 +118,9 @@ def rebuild(stream, states):
         state.last_number = game.winning_number if game else None
         state.last_round = game.game_no if game else ''
         state.last_timestamp = game.winner_event_ts if game else None
+        # Older outages are diagnostic, not a permanent block on groups whose
+        # last appearance and following rounds are fully verified.
+        state.complete = not blocked and (state.last_round in suffix_ids or not interrupted)
         state.period_key = hashlib.sha256(f'{stream.key}:{state.group_id}:{state.last_round or "unseen"}'.encode()).hexdigest()
         state.notified = False
         for event in events[state.group_id]:
@@ -131,12 +139,13 @@ def rebuild(stream, states):
                                              status__in=['pending', 'failed']).update(
                     status='cancelled', error='Absence resolved or superseded during reconciliation.')
         state.save()
+    reconcile(stream, states, suffix, previous_round, games)
     stream.dirty = False
     stream.save()
 
 
 def eligible(stream, state):
-    return (stream.complete and stream.enabled and state.enabled and state.threshold is not None
+    return (state.complete and stream.enabled and state.enabled and state.threshold is not None
             and state.absence >= state.threshold)
 
 
@@ -205,8 +214,14 @@ def save_settings(key, enabled, values, editor):
     if set(values) != set(GROUP_BY_ID):
         raise ValueError('Settings must contain all seven groups.')
     validated = {group: dict(enabled=bool(value['enabled']),
-                            threshold=parse_threshold(value['threshold'], value['enabled']))
+                            threshold=parse_threshold(value['threshold'], value['enabled']),
+                            **(dict(ending_enabled=bool(value['ending_enabled']),
+                                    ending_threshold=parse_threshold(value.get('ending_threshold'), value['ending_enabled']))
+                               if 'ending_enabled' in value else {}))
                  for group, value in values.items()}
+    # Advance the ending cursor under the old settings first. Enabling or
+    # lowering a threshold must not replay an already completed ending.
+    synchronize(key, evaluate_current=False)
     stream = locked_stream(key)
     if stream.enabled != bool(enabled):
         GroupAbsenceChange.objects.create(stream=stream, group_id='Global',
@@ -214,18 +229,20 @@ def save_settings(key, enabled, values, editor):
         stream.enabled = bool(enabled)
         stream.save(update_fields=['enabled'])
     for state in stream.groups.all():
-        old = dict(enabled=state.enabled, threshold=state.threshold)
-        new = validated[state.group_id]
+        old = dict(enabled=state.enabled, threshold=state.threshold,
+                   ending_enabled=state.ending_enabled, ending_threshold=state.ending_threshold)
+        new = dict(old, **validated[state.group_id])
         if old != new:
             GroupAbsenceChange.objects.create(stream=stream, group_id=state.group_id,
                                               old_value=old, new_value=new, editor=editor)
             state.enabled, state.threshold = new['enabled'], new['threshold']
-            state.save(update_fields=['enabled', 'threshold'])
+            state.ending_enabled, state.ending_threshold = new['ending_enabled'], new['ending_threshold']
+            state.save(update_fields=['enabled', 'threshold', 'ending_enabled', 'ending_threshold'])
     return synchronize(key)
 
 
 def alert_state(stream, state):
-    if not stream.complete:
+    if not state.complete:
         return 'Data incomplete'
     if state.threshold is None:
         return 'Not configured'
