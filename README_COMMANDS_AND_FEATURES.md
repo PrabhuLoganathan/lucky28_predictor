@@ -660,3 +660,25 @@ shows the returning number and the number of missed rounds before it returned.
 Active absence and streak notifications also carry their family name; streak
 endings remain explicitly labeled STREAK ENDED. These visual identities do not
 change trigger thresholds or result calculations.
+
+### Gap analytics on alert cards
+
+New applicable alert cards include current absence bars for the relevant family:
+rows, columns, size, parity, combinations, colors, or ranges. Number and 10-game
+window alerts show the affected numbers. The alerted groups are marked `>`;
+`MAX` identifies the largest current gap within each displayed family. Bars in
+each family share a linear scale. Historical average and longest gap use only
+verified completed intervals. `0` means a hit in the latest result, `+` means no
+appearance in the captured history, and `*` marks unverified intervening rounds.
+
+Analytics are frozen with the alert, including the history count and cutoff round.
+They can use more history than the 150-game timeline; pre-round rules use the
+history captured during evaluation. Absence-ended cards retain the ended absence
+count in the heading and show the returning group's current gap as zero.
+Captions also include a compact gap summary. Older saved alerts retain their
+original evidence; no current statistics are substituted into old cards.
+No trigger settings or thresholds change, and no old alerts are replayed.
+
+```sh
+.venv/bin/python django_lucky28/manage.py test games.tests.test_card_gaps games.tests.test_alert_cards --noinput
+```

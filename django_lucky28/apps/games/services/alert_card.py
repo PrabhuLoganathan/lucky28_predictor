@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 from games.category_config import CATEGORY_BY_ID
 from games.group_config import GROUP_BY_NUMBER, GROUP_BY_ID, GROUP_BY_NAME
 from .alert_identity import group_identity, group_heading
+from .card_gaps import gap_sections, gap_label
 
 WHITE, MUTED, BG, PANEL = '#f1f5ff', '#9baec9', '#0b1120', '#152139'
 STYLES = {
@@ -121,7 +122,7 @@ def card_model(payload, kind):
                 identity=identity,
                 return_detail=(f'Returned: {payload["ended_number"]} · absence reset to 0'
                                if absence_ended and 'ended_number' in payload else ''),
-                snapshot=snapshot, focus=focus)
+                snapshot=snapshot, focus=focus, gap_sections=gap_sections(payload, kind, snapshot))
 
 
 def sticker(draw, center, radius, key, color):
@@ -195,7 +196,9 @@ def render_card(payload, kind='alert', budget=2.0):
     block_height = sum(28 + len(t)*30 + len(d)*28 for _,t,d in blocks)
     rows = math.ceil(len(games)/30)
     timeline_height = 370 + rows*32 if games else 150
-    height = 440 + block_height + timeline_height + 90
+    sections = model['gap_sections']
+    gap_height = 160 + sum(76 + len(section['rows'])*38 for section in sections) if sections else 0
+    height = 440 + block_height + timeline_height + 90 + gap_height
     canvas = Image.new('RGB', (1080, height), BG)
     draw = ImageDraw.Draw(canvas)
     def text(x,y,value,font=None,color=WHITE,anchor=None):
@@ -262,6 +265,43 @@ def render_card(payload, kind='alert', budget=2.0):
     if len(matches)>3:
         text(40,y+2,f'+ {len(matches)-3} more conditions in saved evidence',fonts[18],MUTED)
     y+=40
+
+    if sections:
+        evidence = snapshot['gap_analytics']
+        draw.rounded_rectangle((32,y,1048,y+gap_height-20),radius=20,fill=PANEL,outline='#2a3b55',width=2)
+        text(54,y+18,'GAP ANALYTICS',bold[24])
+        text(54,y+53,clipped(f'{evidence["history_count"]} saved results · as of #{evidence["as_of"]}',fonts[18],960),fonts[18],MUTED)
+        gy=y+88
+        for section in sections:
+            check()
+            text(54,gy,section['family']+' · current absence',bold[20],accent)
+            text(690,gy,f'Linear scale 0–{section["scale"]}',fonts[16],MUTED,'ra')
+            text(825,gy,'AVG GAP',fonts[16],MUTED,'ra')
+            text(1018,gy,'LONGEST GAP',fonts[16],MUTED,'ra')
+            gy+=36
+            highest=max((row['current_gap'] or 0 for row in section['rows']),default=0)
+            for row in section['rows']:
+                marked=row['highlighted']
+                if marked:
+                    draw.rounded_rectangle((45,gy-3,1034,gy+31),radius=7,fill='#24354e')
+                    draw.rectangle((45,gy-3,49,gy+31),fill=accent)
+                text(60,gy,clipped(('> ' if marked else '')+row['label'],fonts[18],190),fonts[18],WHITE if marked else MUTED)
+                maximum=highest>0 and row['current_gap']==highest
+                text(350,gy,gap_label(row)+(' MAX' if maximum else ''),fonts[18],'#ff879b' if maximum else WHITE,'ra')
+                draw.rounded_rectangle((370,gy+5,690,gy+22),radius=5,fill=BG)
+                value=row['current_gap'] or 0
+                if value:
+                    width=max(3,320*value/section['scale'])
+                    color=row['color'] if section['family']=='Colors' else '#ff879b' if maximum else accent if marked else '#8899b5'
+                    draw.rounded_rectangle((370,gy+5,370+width,gy+22),radius=3,fill=color)
+                for x,field in ((825,'average_gap'),(1018,'max_gap')):
+                    text(x,gy,row[field] if row[field] is not None else 'N/A',fonts[18],MUTED,'ra')
+                gy+=38
+            gy+=40
+        text(54,gy-24,'> Alert group · MAX = largest current gap · 0 = appeared in latest result',fonts[16],MUTED)
+        text(54,gy,'+ Not seen in saved history · * Unverified rounds; observed count only',fonts[16],MUTED)
+        text(54,gy+24,'Average / longest use verified completed gaps only. N/A = insufficient history.',fonts[16],MUTED)
+        y+=gap_height
 
     draw.rounded_rectangle((32,y,1048,y+timeline_height),radius=20,fill='#121e32',outline='#2a3b55',width=2)
     text(54,y+22,'GLOBAL TIMELINE',bold[24])

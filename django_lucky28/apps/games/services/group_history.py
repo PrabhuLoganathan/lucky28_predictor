@@ -29,7 +29,7 @@ def definitions():
     return groups
 
 
-def group_statistics(games, latest_available=True):
+def group_statistics(games, latest_available=True, groups=None):
     """Newest first; zero means a hit now, consecutive hits produce a zero gap.
 
     Unverified boundaries do not become invented misses. Their observed counts
@@ -47,7 +47,7 @@ def group_statistics(games, latest_available=True):
                     url=reverse('game_detail', args=[game.game_no]))
 
     output = []
-    for definition in definitions():
+    for definition in definitions() if groups is None else groups:
         members = set(definition['numbers'])
         positions = [i for i, game in enumerate(games) if game.winning_number in members]
         intervals = [(newer, older, older-newer-1, boundaries[older] != boundaries[newer])

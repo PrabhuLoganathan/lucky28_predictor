@@ -48,6 +48,19 @@ def format_message(payload, kind='alert', limit=4096):
         lines = message.split('\n')
         lines.insert(2, f'🧭 Timeline snapshot: {len(games)} / 150 games · newest first')
         message = '\n'.join(lines)
+    from .card_gaps import gap_sections, gap_label
+    sections = gap_sections(payload, kind, payload.get('global_timeline', {}))
+    if sections:
+        selected = [row for section in sections for row in section['rows'] if row['highlighted']]
+        rows = selected or [row for section in sections for row in section['rows']]
+        summary = ' · '.join(f'{row["label"]}: {gap_label(row)}' for row in rows[:6])
+        if len(rows) > 6:
+            summary += f' · +{len(rows)-6} in saved evidence'
+        lines = message.split('\n')
+        lines.insert(2, '📊 Gap analytics (observed rounds): ' + escape(summary))
+        if any(row['current_incomplete'] or row['gap_lower_bound'] for row in rows[:6]):
+            lines.insert(3, '* Unverified history · + Not seen in saved history')
+        message = '\n'.join(lines)
     length = lambda value: len(value.encode('utf-16-le')) // 2
     if length(message) <= limit:
         return message
