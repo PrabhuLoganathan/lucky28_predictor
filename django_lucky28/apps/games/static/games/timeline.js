@@ -161,7 +161,9 @@
   const boardObserver=new ResizeObserver(updateBoardHint);boardObserver.observe(scroller);boardObserver.observe(frame);
 
   // Reuse round buttons across polls so keyboard focus stays on the same round.
-  const recentModes=['Number','Size','Parity','Combination'];
+  const recentModes=['Number','Size','Parity','Combination','Board rows','Board columns','Colors','Extreme numbers'];
+  const recentTracks=['number','size','parity','combo','row','column','color','extreme'];
+  const boardColors=['#38bdf8','#a78bfa','#34d399','#fbbf24','#fb923c','#f472b6','#94a3b8'];
   // Match the timeline's category colors even when those tracks are hidden.
   const recentCategoryLegends={
     Size:[['S','Small','#38bdf8'],['B','Big','#34d399']],
@@ -176,10 +178,14 @@
   recentDetails.setAttribute('aria-controls','tl-recent-info');recentDetails.setAttribute('aria-expanded','false');
   const recentNewest=button('Back to newest',()=>{recentViewport.scrollTop=0;updateRecentScroll();});recentNewest.id='tl-recent-newest';
   recentNewest.setAttribute('aria-controls','tl-recent-viewport');
-  recentHeading.append(recentCaption,recentView,recentDetails,recentNewest);
+  const recentSelect=make('select');recentSelect.id='tl-recent-select';
+  recentSelect.setAttribute('aria-label','Newest display');recentSelect.setAttribute('aria-controls','tl-recent-viewport');
+  recentModes.forEach((label,index)=>{const option=make('option',label);option.value=String(index);recentSelect.append(option);});
+  recentSelect.addEventListener('change',()=>{recentMode=Number(recentSelect.value);renderRecent(recentSnapshot);});
+  recentHeading.append(recentCaption,recentSelect,recentView,recentDetails,recentNewest);
   const recentViewport=make('div',undefined,'tl-recent-viewport');recentViewport.id='tl-recent-viewport';recentViewport.tabIndex=0;
   recentViewport.setAttribute('role','region');recentViewport.setAttribute('aria-label','Latest 150 available results, newest first. Scroll down for older rounds and up for newer rounds.');
-  const recentChips=make('div',undefined,'tl-recent-chips');recentChips.setAttribute('role','group');recentChips.setAttribute('aria-label','Recent results; activate a circle to cycle all results through number, size, parity and combination');
+  const recentChips=make('div',undefined,'tl-recent-chips');recentChips.setAttribute('role','group');recentChips.setAttribute('aria-label','Recent results; activate a circle to cycle all results through number, size, parity, combination, board rows, board columns, colors and extreme numbers');
   recentViewport.append(recentChips);
   function updateRecentScroll(){recentNewest.disabled=recentViewport.scrollTop<=2;}
   recentViewport.addEventListener('scroll',updateRecentScroll,{passive:true});
@@ -189,9 +195,16 @@
   const recentLegend=make('div',undefined,'tl-recent-legend');recentLegend.setAttribute('aria-label','Recent result color key');
   recentStrip.replaceChildren(recentHeading,recentViewport,recentLegend,recentNotice,recentInfo);
   function recentColors() {
-    if(recentMode===0)return (data?.stream===el('stream').value?data.group_stats??[]:[])
-      .filter(group=>group.family==='Colors').map(group=>({key:group.key,label:group.label,color:group.color,numbers:group.numbers}));
-    const track=['number','size','parity','combo'][recentMode];
+    const groups=data?.stream===el('stream').value?data.group_stats??[]:[];
+    if(recentMode===0 || recentMode===6)return groups.filter(group=>group.family==='Colors')
+      .map(group=>({key:recentMode===0?group.key:`G${Number(group.key.slice(1))}`,label:group.label,color:group.color,numbers:group.numbers}));
+    const track=recentTracks[recentMode];
+    if(recentMode===4 || recentMode===5)return groups.filter(group=>group.family===(recentMode===4?'Rows':'Columns'))
+      .map((group,index)=>({key:`${group.key[0]}${Number(group.key.slice(1))}`,label:group.label,numbers:group.numbers,
+        color:data?.tracks?.find(item=>item.tracker_key===track)?.legend[index]?.color??boardColors[index]}));
+    if(recentMode===7)return [
+      {key:'J',label:'Edges · 0–5, 22–27',color:'#fbbf24'},
+      {key:'M',label:'Middle · 6–21',color:'#94a3b8'}];
     return recentCategoryLegends[recentModes[recentMode]].map(([key,label,color])=>({key,label,
       color:data?.tracks?.find(item=>item.tracker_key===track)?.legend.find(item=>item.letter===key)?.color??color}));
   }
@@ -202,15 +215,18 @@
   }
   function recentClassification(game) {
     const size=game.number<14?'S':'B',parity=game.number%2===0?'E':'O';
-    return {size,parity,combo:size+parity};
+    const color=(data?.group_stats??[]).find(group=>group.family==='Colors' && group.numbers.includes(game.number));
+    return {size,parity,combo:size+parity,row:`R${Math.floor(game.number/7)+1}`,column:`C${game.number%7+1}`,
+      color:color?`G${Number(color.key.slice(1))}`:'?',colorName:color?.label??'Color unavailable',
+      extreme:game.number<=5 || game.number>=22?'J':'M'};
   }
   function focusRecent(game) {recentFocused=game.game_no;recentRecord=game;updateRecentDetails();}
   function updateRecentDetails() {
     recentDetails.disabled=!recentRecord;
     recentDetails.setAttribute('aria-expanded',String(!recentInfo.hidden));
     if(!recentRecord){recentInfo.hidden=true;recentDetails.setAttribute('aria-expanded','false');recentInfoText.textContent='';recentLink.removeAttribute('href');return;}
-    const {size,parity,combo}=recentClassification(recentRecord);
-    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
+    const {size,parity,combo,row,column,colorName,extreme}=recentClassification(recentRecord);
+    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–5, 22–27)':'Middle (6–21)'}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
     recentLink.textContent=`Open round #${recentRecord.game_no} ↗`;recentLink.href=recentRecord.url;
     recentDetails.title=`Details for round #${recentRecord.game_no}`;
   }
@@ -219,6 +235,7 @@
     const stream=el('stream').value;
     if(recentStream!==stream){recentFocused=null;recentRecord=null;recentInfo.hidden=true;recentStream=stream;recentNodes.clear();recentChips.replaceChildren();recentViewport.scrollTop=0;}
     recentSnapshot=recent;
+    recentSelect.value=String(recentMode);recentSelect.disabled=!recent.length;
     recentView.textContent=`View: ${recentModes[recentMode]} ↻`;recentView.disabled=!recent.length;
     recentView.setAttribute('aria-label',`View: ${recentModes[recentMode]}. Switch to ${recentModes[(recentMode+1)%recentModes.length]}`);
     recentView.setAttribute('aria-controls','tl-recent-results');
@@ -245,7 +262,8 @@
         control.addEventListener('focus',()=>focusRecent(control.roundRecord));recentNodes.set(game.game_no,control);
       }
       control.roundRecord=game;
-      const {size,parity,combo}=recentClassification(game),label=[game.number,size,parity,combo][recentMode];
+      const classification=recentClassification(game),{size,parity,combo,row,column,colorName,extreme}=classification;
+      const label=recentMode===0?game.number:classification[recentTracks[recentMode]];
       const colorGroup=colors.find(item=>recentMode===0?item.numbers.includes(game.number):item.key===label);
       control.style.setProperty('--recent-color',colorGroup?.color??'#aab0bb');
       control.dataset.colorGroup=colorGroup?.key??'unknown';
@@ -256,7 +274,7 @@
       badge.dataset.kind=kind??'unknown';
       badge.title=kind?'Compared with the ten completed rounds before this result.':'Ten continuous prior results are required.';
       control.classList.toggle('is-latest',index===0);control.classList.toggle('has-gap',Boolean(game.gap_before));
-      control.title=`${index===0?'Newest · ':''}#${game.game_no} · Number ${game.number} · ${size} · ${parity} · ${combo} · ${colorGroup?.label??'Color unavailable'} · ${formatTime(game.timestamp)} · ${badge.textContent}${game.gap_before?' · history gap before this round':''}`;
+      control.title=`${index===0?'Newest · ':''}#${game.game_no} · Number ${game.number} · ${size} · ${parity} · ${combo} · ${row} · ${column} · ${colorName} · ${extreme==='J'?'Edges':'Middle'} · ${formatTime(game.timestamp)} · ${badge.textContent}${game.gap_before?' · history gap before this round':''}`;
       control.setAttribute('aria-label',`${control.title}. Showing ${recentModes[recentMode]} ${label}. Activate to show ${recentModes[(recentMode+1)%recentModes.length]} for all results.`);
       // Inserting a new round leaves unchanged nodes in place.
       if(recentChips.children[index]!==control)recentChips.insertBefore(control,recentChips.children[index]??null);

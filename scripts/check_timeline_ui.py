@@ -142,12 +142,30 @@ const { execFileSync } = require('child_process');
     expect(new Set(await recentChips.evaluateAll(nodes=>nodes.map(n=>n.style.getPropertyValue('--recent-color')))).size).toBe(4);
     const comboDimensions=await recentChips.first().boundingBox();expect(comboDimensions.width).toBe(dimensions.width);expect(comboDimensions.height).toBe(dimensions.height);
     await expect(recentChips.first()).toBeFocused();
+    const recentSelect=page.locator('#tl-recent-select');
+    const addedViews=[
+      ['Board rows',recentNumbers.map(n=>'R'+(Math.floor(n/7)+1)),4],
+      ['Board columns',recentNumbers.map(n=>'C'+(n%7+1)),7],
+      ['Colors',['G5','G7','G3','G7','G5','G5','G7','G5','G7','G6'],7],
+      ['Extreme numbers',recentNumbers.map(n=>n<=5||n>=22?'J':'M'),2]
+    ];
+    for(const [name,labels,legendCount] of addedViews){
+      await recentView.click();expect(await recentLabels()).toEqual(labels);
+      await expect(recentView).toHaveText('View: '+name+' ↻');
+      await expect(page.locator('.tl-recent-legend>span')).toHaveCount(legendCount);
+    }
     await recentView.click();expect(await recentLabels()).toEqual(recentNumbers.map(String));
+    for(const [name,labels] of addedViews){
+      await recentSelect.selectOption({label:name});expect(await recentLabels()).toEqual(labels);
+      await refresh();expect(await recentLabels()).toEqual(labels);
+    }
+    await recentSelect.selectOption({label:'Number'});
     expect(await selectedNumbers()).toEqual(selectionBeforeView);expect(await comparison()).toBe(probabilityBeforeView);
     await expect(page.locator('#tl-selection-status')).toContainText('Mode: Auto last 10');
     await page.locator('[data-round="P7"]').focus();await page.locator('#tl-recent-details').click();
     await expect(page.locator('#tl-recent-info')).toContainText('Number 4 · Small (S) · Even (E) · SE · #P7');
     await expect(page.locator('.tl-recent-round-link')).toHaveAttribute('href',/P7/);
+    await expect(page.locator('#tl-recent-info')).toContainText('Row 1 · Column 5 · Magenta · Edges (0–5, 22–27)');
     await page.locator('#tl-recent-details').click();await expect(page.locator('#tl-recent-info')).toBeHidden();
     // No duplicate statistics or explanation sits between the board and Newest.
     expect(await page.locator('.tl-board-scroller').evaluate(n=>n.nextElementSibling.id)).toBe('tl-recent-results');
@@ -291,7 +309,7 @@ const { execFileSync } = require('child_process');
     await recentChips.last().click();await expect(recentChips.last().locator('.tl-recent-circle')).toHaveText('S');
     await page.locator('#tl-recent-details').click();await expect(page.locator('#tl-recent-info')).toContainText('#'+olderRound);
     await page.locator('#tl-recent-newest').click();expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
-    await recentView.click();await recentView.click();await recentView.click();
+    await recentSelect.selectOption({label:'Number'});
     await expect(page.locator('[data-gap="B"] strong')).toHaveText('999+');
     await expect(page.locator('[data-streak="SE"] strong')).toHaveText('999+');
     const metricFits=await page.locator('[data-gap="B"] strong').evaluate(node=>node.scrollWidth<=node.clientWidth);

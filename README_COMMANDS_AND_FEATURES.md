@@ -663,6 +663,14 @@ change trigger thresholds or result calculations.
 
 ### Gap analytics on alert cards
 
+The palette's **Newest** results also have a **Newest display** selector for
+Number, Size, Parity, Combination, Board rows, Board columns, Colors, and Extreme
+numbers. Choose a view directly or click a result circle / View button to cycle.
+Rows show R1–R4, columns C1–C7, and colors G1–G7, with matching legends.
+Extreme numbers show J for edges (0–5 and 22–27) and M for middle (6–21).
+Game details include all these classifications. The selected view stays active
+during live refreshes and scrolling through the latest 150 results.
+
 New applicable alert cards include current absence bars for the relevant family:
 rows, columns, size, parity, combinations, colors, or ranges. Number and 10-game
 window alerts show the affected numbers. The alerted groups are marked `>`;
