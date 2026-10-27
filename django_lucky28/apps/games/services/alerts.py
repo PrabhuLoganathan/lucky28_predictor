@@ -59,6 +59,9 @@ def record_live_event(game, phase):
     synchronize_categories(stream_key(game))
     if game.game_type not in (None, '', 'lucky28'):
         return None
+    if phase == 'winner':
+        from .tips import record_game as record_tip_game
+        record_tip_game(game)
     observed = game.pre_event_ts if phase == 'pre' else game.winner_event_ts
     if isinstance(observed, str):
         observed = parse_datetime(observed)

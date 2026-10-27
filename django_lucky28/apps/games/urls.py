@@ -4,9 +4,12 @@ from . import logger_api
 from . import alert_views
 from . import timeline_views
 from . import case_study_views
+from . import tip_views
 from . import alert_management, group_views, window_views, category_views
 
 urlpatterns = [
+    path('tips/', tip_views.dashboard, name='tip_dashboard'),
+    path('api/tips/', tip_views.live, name='tip_live'),
     path('case-study/', case_study_views.dashboard, name='case_study'),
     path('api/case-study/', case_study_views.live, name='case_study_live'),
     path('api/case-study/<int:case_id>/', case_study_views.detail, name='case_study_detail'),

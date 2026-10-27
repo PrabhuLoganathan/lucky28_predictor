@@ -44,11 +44,23 @@ export function normalizePacket(value: unknown, observedAt = new Date().toISOStr
     copyCount('betTotalEnergy', 'bet_total_energy');
     if (info.status === 3 || info.status === 4) {
         if (!integer(info.winResult) || info.winResult < 0 || info.winResult > 27) return null;
+        // Optional settlement assertions must never disappear on malformed input:
+        // omitting an invalid reported tip could otherwise accept bad accounting.
+        for (const field of ['reportedTip', 'settlementSequence', 'winnerCount', 'betUsers']) {
+            if (field in info && (!integer(info[field]) || info[field] < 0)) return null;
+        }
+        for (const field of ['settlementFinal', 'totalsComplete']) {
+            if (field in info && typeof info[field] !== 'boolean') return null;
+        }
         event.phase = 'winner';
         event.data.winning_number = info.winResult;
         event.data.status = info.status;
         copyCount('winnerCount', 'winner_count');
         copyCount('winTotalEnergy', 'win_total_energy');
+        copyCount('reportedTip', 'reported_tip');
+        copyCount('settlementSequence', 'settlement_sequence');
+        if (typeof info.settlementFinal === 'boolean') event.data.settlement_final = info.settlementFinal;
+        if (typeof info.totalsComplete === 'boolean') event.data.totals_complete = info.totalsComplete;
         if (typeof info.openCode === 'string') {
             const numbers = info.openCode.split(',').map((s: string) => Number(s.trim()));
             if (numbers.length === 3 && numbers.every((n: number) => integer(n) && n >= 0 && n <= 9)
@@ -77,9 +89,15 @@ export class PacketCollector {
         if (!event) return null;
         const seen = this.milestones.get(event.game_no) || new Set<string>();
         const seconds = Number(event.data.surplus_seconds);
-        const stage = event.phase === 'winner' ? 'winner' : seconds === 0 ? 'zero' : seconds <= 5 ? 'five' : seconds <= 10 ? 'ten' : 'start';
+        // Let changed settlement totals reach Django for completion/conflict
+        // handling; identical room views still produce only one event.
+        const settlement = ['winning_number', 'status', 'bet_total_energy', 'win_total_energy',
+            'reported_tip', 'settlement_sequence', 'settlement_final', 'totals_complete'];
+        const stage = event.phase === 'winner' ? `winner:${JSON.stringify(settlement.map(key => event.data[key]))}`
+            : seconds === 0 ? 'zero' : seconds <= 5 ? 'five' : seconds <= 10 ? 'ten' : 'start';
         if (seen.has(stage) || (event.phase === 'pre' && seen.has('winner'))) return null;
         seen.add(stage);
+        if (event.phase === 'winner') seen.add('winner');
         this.milestones.set(event.game_no, seen);
         if (this.milestones.size > 2000) this.milestones.delete(this.milestones.keys().next().value!);
         return event;

@@ -7,6 +7,10 @@ The separate [Number case study](CASE_STUDY.md) records experimental pre-result
 rankings, result explanations, hits/misses and an exportable evidence log at
 `/case-study/`. Its recorder starts with `run.py` and writes its own database.
 
+The [Tip game model](TIP_MODEL.md) at `/tips/` classifies final bets minus final
+prizes, tracks no-tip milestones at 7, 10, and 15 rounds, and persists a retryable
+alert queue. Live logger ingestion updates it; external delivery is opt-in.
+
 Run the dashboard and logger together from this project:
 
 ```bash

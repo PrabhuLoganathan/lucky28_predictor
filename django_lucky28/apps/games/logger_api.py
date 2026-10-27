@@ -54,6 +54,10 @@ class WinnerDataSerializer(serializers.Serializer):
     bet_users = serializers.IntegerField(min_value=0, required=False)
     bet_total_energy = serializers.IntegerField(min_value=0, required=False)
     status = serializers.ChoiceField(choices=[3, 4])
+    reported_tip = serializers.IntegerField(min_value=0, max_value=2**53 - 1, required=False)
+    settlement_sequence = serializers.IntegerField(min_value=0, max_value=2**53 - 1, required=False)
+    settlement_final = serializers.BooleanField(required=False)
+    totals_complete = serializers.BooleanField(required=False)
 
     def validate(self, data):
         if 'reward_numbers' in data and sum(data['reward_numbers']) != data['winning_number']:
@@ -156,6 +160,17 @@ def events(request):
                 SignalAnalyzer(notify=False).analyze_game(game)
         if not duplicate:
             record_live_event(game, event['phase'])
+        elif event['phase'] == 'winner':
+            # A later final packet may complete a previously partial settlement.
+            # Conflicting accepted totals are diagnosed without replacing them.
+            from .services.tips import record_game as record_tip_game
+            tip = record_tip_game(game, raw=raw)
+            if tip and tip['result']['status'] in ('TIP', 'NO_TIP'):
+                for field in ('bet_total_energy', 'win_total_energy', 'bet_users', 'winner_count', 'status'):
+                    if field in data:
+                        setattr(game, field, data[field])
+                game.winner_raw = raw
+                game.save()
         signals = list(SignalLog.objects.filter(game=game).order_by('id').values(
             'id', 'rule__name', 'rule__dimension', 'rule__target_value', 'rule__severity', 'value',
         )) if event['phase'] == 'winner' else []

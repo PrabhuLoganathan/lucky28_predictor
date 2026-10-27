@@ -89,3 +89,6 @@ ALERT_COLLECTION_TIMEOUT_MINUTES = 3
 
 # Optional externally reachable origin for links in group absence notifications.
 ALERT_PUBLIC_BASE_URL = os.environ.get('ALERT_PUBLIC_BASE_URL', '')
+
+# A new monitor ID permits deliberate replay after changing tip thresholds.
+TIP_MONITOR_ID = os.environ.get('TIP_MONITOR_ID', 'lucky28')

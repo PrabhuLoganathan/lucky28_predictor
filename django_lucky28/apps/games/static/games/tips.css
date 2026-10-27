@@ -1,0 +1,4 @@
+#tip-monitor th, #tip-monitor td { white-space: nowrap; padding: 0.8rem; }
+#tip-monitor td { vertical-align: top; }
+#tip-monitor .tip-diagnostic { white-space: normal; min-width: 14rem; max-width: 20rem; margin-top: 0.25rem; }
+#tip-events article:last-child { border-bottom: 0 !important; margin-bottom: 0 !important; padding-bottom: 0 !important; }

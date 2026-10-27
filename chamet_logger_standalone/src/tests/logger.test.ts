@@ -79,6 +79,30 @@ test('configuration resolves profile and data paths inside the shared project', 
     assert.equal(manual.selectors.number, '.number-option');
 });
 
+test('collector forwards completed or changed settlements while deduplicating identical winners', () => {
+    const collector = new PacketCollector();
+    assert.ok(collector.collect(winner));
+    const final = { ...winner, betTotalEnergy: 100, winTotalEnergy: 99,
+        reportedTip: 1, totalsComplete: true, settlementFinal: true, settlementSequence: 897 };
+    const event = collector.collect(final)!;
+    assert.equal(event.data.bet_total_energy, 100);
+    assert.equal(event.data.win_total_energy, 99);
+    assert.equal(event.data.reported_tip, 1);
+    assert.equal(event.data.settlement_sequence, 897);
+    assert.equal(event.data.totals_complete, true);
+    assert.equal(collector.collect(final), null);
+    assert.ok(collector.collect({ ...final, winTotalEnergy: 98 }));
+    assert.ok(collector.collect({ ...final, totalsComplete: false }));
+    assert.equal(collector.collect({ gameNo: 'game-1', winResult: -1, status: 1, surplusSeconds: 0 }), null);
+});
+
+test('malformed optional settlement assertions are rejected instead of silently omitted', () => {
+    for (const changes of [{reportedTip: -1}, {reportedTip: '1'}, {reportedTip: Number.MAX_SAFE_INTEGER+1},
+        {settlementSequence: false}, {totalsComplete: 'false'}, {settlementFinal: 1}, {winnerCount: -1}]) {
+        assert.equal(normalizePacket({...winner, betTotalEnergy: 100, ...changes}), null);
+    }
+});
+
 test('automatic navigation waits for login and recovers only after Number Game progress stops', () => {
     const health = new NumberGameHealth();
     assert.equal(health.needsRecovery(1000000, 120000), false); // Login has no deadline.

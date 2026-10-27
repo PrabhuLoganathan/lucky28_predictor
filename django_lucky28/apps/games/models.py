@@ -6,6 +6,7 @@ from .group_models import (GroupAbsenceStream, GroupAbsenceState, GroupAbsenceCh
 from .window_models import WindowAlertState, WindowAlertEvent
 
 from .category_models import CategoryAlertSettings, CategoryAlertRule, CategoryAlertEvent, CategoryAlertChange
+from .tip_models import TipStream, TipRound, TipEvent
 
 class GameRound(models.Model):
     game_no = models.CharField(max_length=32, unique=True, db_index=True)

@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load timeline_assets %}
+{% block title %}Tip games · Lucky28{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% timeline_asset 'games/tips.css' %}">
+<main id="tip-monitor" data-api="{% url 'tip_live' %}">
+  <header class="d-flex justify-content-between align-items-start gap-3 mb-4">
+    <div><p class="text-secondary mb-1">FINAL SETTLEMENTS</p><h1>Tip games</h1>
+      <p class="text-secondary">Final bets − final prizes = tip. Counts describe completed games.</p></div>
+    <button class="btn btn-outline-light" id="tip-refresh" type="button">Refresh</button>
+  </header>
+  <p id="tip-status" role="status" aria-live="polite">Loading settlements…</p>
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3"><section class="card h-100"><div class="card-body"><h2 class="h6 text-secondary">No-tip streak</h2><strong class="fs-3" id="tip-streak">—</strong><p class="small mb-0" id="tip-certainty"></p></div></section></div>
+    <div class="col-sm-6 col-lg-3"><section class="card h-100"><div class="card-body"><h2 class="h6 text-secondary">Last tip round</h2><strong id="tip-last">—</strong></div></section></div>
+    <div class="col-sm-6 col-lg-3"><section class="card h-100"><div class="card-body"><h2 class="h6 text-secondary">Streak milestones</h2><strong class="fs-3" id="tip-thresholds">7 · 10 · 15</strong><p class="small mb-0">Once per milestone in each streak.</p></div></section></div>
+    <div class="col-sm-6 col-lg-3"><section class="card h-100"><div class="card-body"><h2 class="h6 text-secondary">Queued alerts</h2><strong class="fs-3" id="tip-queued">0</strong><p class="small mb-0">Delivery uses the separate tip worker.</p></div></section></div>
+  </div>
+  <p class="text-secondary small">“At least” means the streak began before available history or after a gap. A date boundary also breaks continuity unless a verified continuous sequence is supplied.</p>
+  <section class="card mb-4"><div class="card-header"><h2 class="h5 mb-0">Recent settlements</h2></div>
+    <div class="table-responsive" tabindex="0" role="region" aria-label="Recent settlements"><table class="table mb-0">
+      <thead><tr><th scope="col">Round</th><th scope="col">Result</th><th scope="col">Bets</th><th scope="col">Prizes</th><th scope="col">Tip</th><th scope="col">Tip %</th><th scope="col">Classification</th></tr></thead>
+      <tbody id="tip-rounds"></tbody></table></div>
+  </section>
+  <section class="card"><div class="card-header"><h2 class="h5 mb-0">Alert history</h2></div><div class="card-body" id="tip-events"></div></section>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{% timeline_asset 'games/tips.js' %}" defer></script>{% endblock %}

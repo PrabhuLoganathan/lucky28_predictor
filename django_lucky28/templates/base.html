@@ -163,6 +163,9 @@
                         <a class="nav-link{% if request.resolver_match.url_name == 'case_study' %} active{% endif %}" href="{% url 'case_study' %}">Case study</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link{% if request.resolver_match.url_name == 'tip_dashboard' %} active{% endif %}" href="{% url 'tip_dashboard' %}">Tip games</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link text-warning" href="{% url 'import_games' %}">Import</a>
                     </li>
                 </ul>
