@@ -217,7 +217,7 @@ All paths below are relative to `http://127.0.0.1:8000` unless you changed the p
 | Color absence | `/alerts/groups/` | Seven color groups, absence counters and event history. |
 | Color settings | `/alerts/groups/settings/` | Enable groups and configure thresholds. |
 | Recent 10 games | `/alerts/windows/` | Enable rolling-window drought/repeat alerts and inspect their evidence. |
-| Rows and categories | `/alerts/categories/` | Row, column and combination absence/streak states. |
+| Rows and categories | `/alerts/categories/` | Row, column, combination, extreme-number and board-border absence/streak states. |
 | Category settings | `/alerts/categories/settings/` | Per-group absence/streak thresholds and follow-up settings. |
 | Alert rules | `/alerts/rules/` | Add, edit, enable, disable, delete or restore missing default rules. |
 | Telegram destinations | `/alerts/destinations/` | Chats/channels, plans, expiry, cards and result/health delivery options. |
@@ -369,7 +369,7 @@ per continuing all-distinct period. Missing results pause unreliable evaluations
 | --- | --- |
 | Pre-round pattern rules | Streaks, droughts, density, alternation, streak breakers and individual-number droughts. Freeze evidence from results known before that round. |
 | Color-group absence | Thresholds for all seven color groups, current counts and durable occurrence history. |
-| Rows / columns / combinations | Absence and streak thresholds for 4 rows, 7 columns and SE/SO/BE/BO. |
+| Rows / columns / combinations | Absence and streak thresholds for 4 rows, 7 columns, SE/SO/BE/BO, extreme edges/middle and outer/inner board. |
 | Category endings | Optional follow-ups when a previously delivered absence or streak ends. |
 | Result follow-ups | Optional winner result for a previously delivered pre-round alert. |
 | Collection health | Optional warning when fresh events stop for the configured interval. |
@@ -567,6 +567,7 @@ SQLite journal files as a lock-error workaround.
 | Port is already occupied | Stop the conflicting instance or use another port. A compatible server is reused automatically. |
 | New results seem delayed | Check the latest saved round, `[saved]` / `[retry]` logs and pending queue; verify the game is receiving packets. |
 | `database is locked` / HTTP 503 | Ingestion rolls back and returns a retryable busy response; the captured event stays queued. Avoid duplicate writers, check worker health, and confirm the current code is running. |
+| Broken dashboard, disabled controls, HTTP 500 with `no such table` | Check `.venv/bin/python django_lucky28/manage.py showmigrations games`. An older restored database may lack the alert tables. Preserve it before repair; compare any newer backup's history and integrity before restoring. Stop the app and worker before restoration, then restart with `python3 run.py`, which applies migrations. Resume the configured worker afterward. Applying migrations fixes the schema but does not recover missing history or settings from an older backup. |
 | Broken pipe / timeout | The client may have disconnected before the response. Current logger timeout is 35s, exceeding the 20s SQLite lock wait; inspect queue acknowledgements rather than assuming loss. |
 | No Telegram alerts | Check rule/group switches, thresholds, continuity, destination enablement/expiry, global delivery setting and worker status. Inspect Deliveries for the actual reason. |
 | Question mark, Building history, History gap | There is insufficient verified history for that calculation. Import/reconcile genuine missing results; do not fabricate them. |
@@ -689,4 +690,38 @@ No trigger settings or thresholds change, and no old alerts are replayed.
 
 ```sh
 .venv/bin/python django_lucky28/manage.py test games.tests.test_card_gaps games.tests.test_alert_cards --noinput
+```
+
+### Alert cards: category-specific Newest timeline
+
+New cards show up to 150 frozen results in ten columns of colored circles, newest
+first. The vocabulary follows the alert: numbers, B/S, E/O, SE/BE/BO/SO, R1–R4,
+C1–C7, G1–G7, J/M (extreme edges/middle), or O/I (outer/inner board).
+Number circles use their color group. Gap analytics remains on applicable cards.
+New/Repeated labels compare each number against its preceding ten completed
+rounds; only the newest result carries the current N×/R× run count. Missing
+history is marked, and old snapshots without these tags say “Not saved.”
+Cards use only saved evidence; later results cannot change an archived card.
+When several generic rules activate together, each now queues its own card;
+the eventual round-result notification remains one per destination.
+
+Configure the new **Extreme numbers** and **Board border** groups under
+**Alerts → Rows & categories → Edit category thresholds**
+(`/alerts/categories/settings/`). Each group has separate absence/streak
+thresholds and enable switches. New groups start disabled with unset thresholds;
+existing settings remain unchanged. The existing follow-up option sends an
+absence-ended card when a member returns after an alerted absence, and a
+streak-ended card when a result falls outside an alerted streak.
+
+After updating an existing installation, apply the schema change and restart:
+
+```bash
+.venv/bin/python django_lucky28/manage.py migrate
+.venv/bin/python run.py
+```
+
+Generate local fictional previews without sending Telegram messages:
+
+```bash
+.venv/bin/python scripts/preview_alert_cards.py
 ```

@@ -27,7 +27,8 @@ def gap_sections(payload, kind, snapshot):
     if payload.get('group_id'):
         targets.add(payload['group_id'])
     aliases = dict(size='Size', parity='Parity', color='Colors', row='Rows',
-                   column='Columns', combo='Combos', extreme='Range', range='Range')
+                   column='Columns', combo='Combos', extreme='Range', range='Range',
+                   border='Border')
     families = set()
     for match in payload.get('matches', []):
         series = match.get('group')

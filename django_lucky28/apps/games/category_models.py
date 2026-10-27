@@ -14,7 +14,7 @@ class CategoryAlertSettings(models.Model):
 
 class CategoryAlertRule(models.Model):
     settings = models.ForeignKey(CategoryAlertSettings, on_delete=models.CASCADE, related_name='rules')
-    group_id = models.CharField(max_length=3)
+    group_id = models.CharField(max_length=16)
     mode = models.CharField(max_length=7, choices=[('absence', 'Absence'), ('streak', 'Consecutive streak')])
     enabled = models.BooleanField(default=False)
     threshold = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(MAX_GROUP_THRESHOLD)])

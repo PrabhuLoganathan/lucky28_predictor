@@ -35,7 +35,7 @@ class GroupHistoryTests(TestCase):
         self.assertEqual(groups['SE']['current_gap'], 4)
         self.assertEqual(groups['edges']['current_gap'], 2)
         self.assertEqual(groups['middle']['current_gap'], 0)
-        for family in ('Rows', 'Columns', 'Size', 'Parity', 'Combos', 'Colors', 'Range'):
+        for family in ('Rows', 'Columns', 'Size', 'Parity', 'Combos', 'Colors', 'Range', 'Border'):
             self.assertEqual(sum(g['recent_hits'] for g in groups.values() if g['family'] == family), 6)
 
     def test_empty_and_unseen_are_different_from_zero_and_one_hit_has_no_average(self):
@@ -81,7 +81,13 @@ class GroupHistoryTests(TestCase):
         self.assertEqual(big['completed_gap_count'], 152)
         response = self.client.get('/api/trackers/live/?tracks=')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()['group_stats']), 28)
+        self.assertEqual(len(response.json()['group_stats']), 30)
+        border = groups['border']
+        center = groups['center']
+        self.assertEqual(len(border['numbers']), 18)
+        self.assertEqual(len(center['numbers']), 10)
+        self.assertFalse(set(border['numbers']) & set(center['numbers']))
+        self.assertEqual(set(border['numbers']) | set(center['numbers']), set(range(28)))
 
     def test_current_streaks_reset_and_stop_at_unknown_boundaries(self):
         for i, number in enumerate([14, 5, 7, 9]):

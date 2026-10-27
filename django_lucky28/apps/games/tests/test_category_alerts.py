@@ -24,10 +24,10 @@ class CategoryMappingTests(SimpleTestCase):
     def test_board_partitions_and_boundaries(self):
         for _, groups in CATEGORY_FAMILIES:
             self.assertEqual(sorted(n for group in groups for n in group.numbers), list(range(28)))
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[18]], ['R03', 'C05', 'BE'])
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[0]], ['R01', 'C01', 'SE'])
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[13]], ['R02', 'C07', 'SO'])
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[27]], ['R04', 'C07', 'BO'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[18]], ['R03', 'C05', 'BE', 'middle', 'center'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[0]], ['R01', 'C01', 'SE', 'edges', 'border'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[13]], ['R02', 'C07', 'SO', 'middle', 'border'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[27]], ['R04', 'C07', 'BO', 'edges', 'border'])
 
 
 @override_settings(ALERT_TELEGRAM_ENABLED=True, ALERT_TELEGRAM_BOT_TOKEN='fake-test-token', LOGGER_API_TOKEN='test')
@@ -65,7 +65,7 @@ class CategoryAlertTests(TestCase):
     def test_new_rules_unconfigured_until_explicit_setup(self):
         config, rules = synchronize()
         self.assertFalse(config.enabled)
-        self.assertEqual(len(rules), 30)
+        self.assertEqual(len(rules), 38)
         self.assertTrue(all(not r.enabled and r.threshold is None for r in rules))
 
     def test_absence_three_and_reset_then_new_period(self):
@@ -101,6 +101,21 @@ class CategoryAlertTests(TestCase):
         self.assertEqual(self.rule(mode='streak').count, 0)
         self.sequence([15, 17, 18], start=106)
         self.assertEqual(CategoryAlertEvent.objects.count(), 2)
+
+    def test_extreme_and_border_absence_end_on_return_with_frozen_category(self):
+        self.configure(pairs=(('edges', 'absence'), ('border', 'absence'),
+                              ('middle', 'streak'), ('center', 'streak')))
+        self.sequence([0, 8, 9, 10])
+        self.assertEqual(CategoryAlertEvent.objects.count(), 4)
+        for key in ('edges', 'border'):
+            event = CategoryAlertEvent.objects.get(rule__group_id=key)
+            self.assertEqual(event.snapshot['count'], 3)
+        self.result(104, 1)
+        self.assertEqual(self.rule('edges').count, 0)
+        self.assertEqual(self.rule('border').count, 0)
+        self.assertFalse(CategoryAlertEvent.objects.filter(resolved_at__isnull=True).exists())
+        synchronize()
+        self.assertEqual(CategoryAlertEvent.objects.count(), 4)
 
     def test_column_and_combination_streaks_and_independent_modes(self):
         self.configure(pairs=(('C01', 'streak'), ('SE', 'streak'), ('BO', 'absence')))

@@ -119,9 +119,9 @@ def record_live_event(game, phase):
     if config.telegram_enabled:
         for destination in eligible_destinations(now):
             routed = [m for m in matches if m['is_activation'] and m['min_plan_rank'] <= destination.plan_rank]
-            if routed:
-                queue_delivery(f'alert:{evaluation.pk}:{destination.pk}', destination, 'alert',
-                               dict(evidence, matches=routed), evaluation)
+            for match in routed:
+                queue_delivery(f'alert:{evaluation.pk}:{destination.pk}:{match["identity"]}', destination, 'alert',
+                               dict(evidence, matches=[match]), evaluation)
     return evaluation
 
 

@@ -22,8 +22,18 @@ COMBO_GROUPS = (
     NumberCategory('BO', 'BO — Big Odd', 'SE / BE / BO / SO', tuple(range(15, 28, 2))),
     NumberCategory('SO', 'SO — Small Odd', 'SE / BE / BO / SO', tuple(range(1, 14, 2))),
 )
-CATEGORY_FAMILIES = (('Rows', ROW_GROUPS), ('Columns', COLUMN_GROUPS), ('SE / BE / BO / SO', COMBO_GROUPS))
-CATEGORIES = ROW_GROUPS + COLUMN_GROUPS + COMBO_GROUPS
+EXTREME_GROUPS = (
+    NumberCategory('edges', 'Extreme edges · 0–5, 22–27', 'Extreme numbers', (*range(6), *range(22, 28))),
+    NumberCategory('middle', 'Middle · 6–21', 'Extreme numbers', tuple(range(6, 22))),
+)
+BORDER_GROUPS = (
+    NumberCategory('border', 'Outer board border', 'Board border', tuple(n for n in range(28)
+                   if n < 7 or n >= 21 or n % 7 in (0, 6))),
+    NumberCategory('center', 'Inner board center', 'Board border', (8, 9, 10, 11, 12, 15, 16, 17, 18, 19)),
+)
+CATEGORY_FAMILIES = (('Rows', ROW_GROUPS), ('Columns', COLUMN_GROUPS), ('SE / BE / BO / SO', COMBO_GROUPS),
+                     ('Extreme numbers', EXTREME_GROUPS), ('Board border', BORDER_GROUPS))
+CATEGORIES = ROW_GROUPS + COLUMN_GROUPS + COMBO_GROUPS + EXTREME_GROUPS + BORDER_GROUPS
 CATEGORY_BY_ID = {group.id: group for group in CATEGORIES}
 CATEGORIES_BY_NUMBER = {number: tuple(group for group in CATEGORIES if number in group.numbers) for number in range(28)}
 CATEGORY_MODES = ('absence', 'streak')

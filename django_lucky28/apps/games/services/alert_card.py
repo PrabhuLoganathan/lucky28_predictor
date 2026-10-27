@@ -8,9 +8,11 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 
 from games.category_config import CATEGORY_BY_ID
-from games.group_config import GROUP_BY_NUMBER, GROUP_BY_ID, GROUP_BY_NAME
+from games.group_config import GROUP_BY_NUMBER, GROUP_BY_ID
 from .alert_identity import group_identity, group_heading
 from .card_gaps import gap_sections, gap_label
+from types import SimpleNamespace
+from .timeline import TRACKS, classify
 
 WHITE, MUTED, BG, PANEL = '#f1f5ff', '#9baec9', '#0b1120', '#152139'
 STYLES = {
@@ -53,28 +55,26 @@ def load_font(size, bold=False):
 
 
 def focus_track(payload, kind, snapshot):
-    """Return the alert's visual vocabulary; H/M mean group membership only."""
-    matches = payload.get('matches', [])
-    primary = matches[0] if matches else {}
+    """Use canonical category identity, never words in a display name."""
+    primary = next(iter(payload.get('matches', [])), {})
     group_id = payload.get('group_id')
-    group = CATEGORY_BY_ID.get(group_id) or GROUP_BY_ID.get(group_id)
-    numbers = set(group.numbers) if group else None
-    title = group.name if group else ''
-    if kind == 'alert' and primary.get('values'):
-        values, series = primary['values'], primary.get('group')
-        if series == 'number': numbers = {int(n) for n in values if str(n).isdigit()}
-        elif series == 'size': numbers = {n for n in range(28) if ('Big' if n >= 14 else 'Small') in values}
-        elif series == 'parity': numbers = {n for n in range(28) if ('Even' if n % 2 == 0 else 'Odd') in values}
-        elif series == 'color': numbers = {n for v in values if v in GROUP_BY_NAME for n in GROUP_BY_NAME[v].numbers}
-        title = ' / '.join(values)
-    if numbers is not None:
-        return dict(title=f'{title} appearances', letters=['H' if g['number'] in numbers else 'M' for g in snapshot['games']],
-            legend=[dict(letter='H', label='In group', color='#68e0b4'), dict(letter='M', label='Outside group', color='#52647f')])
-    key = 'window' if kind == 'window' else primary.get('group', 'size')
-    track = snapshot.get('tracks', {}).get(key) or snapshot.get('tracks', {}).get('size')
-    if track: return track
-    return dict(title='Color groups', letters=[f'G{int(GROUP_BY_NUMBER[g["number"]].id[1:])}' for g in snapshot['games']],
-                legend=[dict(letter=f'G{i}', label=g.name, color=g.color) for i, g in enumerate(GROUP_BY_ID.values(), 1)])
+    category = CATEGORY_BY_ID.get(group_id)
+    families = {'Rows': 'row', 'Columns': 'column', 'SE / BE / BO / SO': 'combo',
+                'Extreme numbers': 'extreme', 'Board border': 'border'}
+    key = families.get(category.family) if category else None
+    if group_id in GROUP_BY_ID:
+        key = 'color'
+    if not key:
+        key = {'S': 'size', 'B': 'size', 'E': 'parity', 'O': 'parity'}.get(group_id)
+    key = key or primary.get('group', 'number')
+    if kind in ('window', 'result', 'health', 'test') or primary.get('mode') == 'every_game' or key not in (
+            'number', 'size', 'parity', 'combo', 'row', 'column', 'color', 'extreme', 'border'):
+        key = 'number'
+    # Derivation is safe for legacy snapshots too: only their frozen numbers are used.
+    games = [SimpleNamespace(winning_number=g['number']) for g in snapshot.get('games', [])]
+    title, legend = TRACKS[key]
+    return dict(key=key, title=title, legend=legend,
+                letters=[classify(key, games, i) for i in range(len(games))])
 
 
 def card_model(payload, kind):
@@ -182,7 +182,7 @@ def render_card(payload, kind='alert', budget=2.0):
     deadline = time.monotonic() + budget
     def check():
         if time.monotonic() >= deadline: raise TimeoutError('Card render deadline exceeded')
-    fonts = {size: load_font(size) for size in (16, 18, 20, 22, 24, 28)}
+    fonts = {size: load_font(size) for size in (10, 11, 13, 16, 18, 20, 22, 24, 28)}
     bold = {size: load_font(size, True) for size in (20, 24, 28, 34, 76)}
     model = card_model(payload, kind)
     accent, snapshot, focus = model['accent'], model['snapshot'], model['focus']
@@ -194,8 +194,8 @@ def render_card(payload, kind='alert', budget=2.0):
         title, detail = match_labels(match)
         blocks.append((match, card_lines(title[:500], bold[24], 830)[:2], card_lines(detail[:1000], fonts[22], 830)[:2]))
     block_height = sum(28 + len(t)*30 + len(d)*28 for _,t,d in blocks)
-    rows = math.ceil(len(games)/30)
-    timeline_height = 370 + rows*32 if games else 150
+    rows = math.ceil(len(games)/10)
+    timeline_height = 260 + rows*96 if games else 150
     sections = model['gap_sections']
     gap_height = 160 + sum(76 + len(section['rows'])*38 for section in sections) if sections else 0
     height = 440 + block_height + timeline_height + 90 + gap_height
@@ -309,44 +309,48 @@ def render_card(payload, kind='alert', budget=2.0):
     if not games:
         text(54,y+75,'No completed timeline saved with this alert.',fonts[24],MUTED)
     else:
-        text(54,y+66,clipped(focus['title'],bold[20],700),bold[20],accent)
-        text(1025,y+67,'LATEST 15 ENLARGED',fonts[16],MUTED,'ra')
+        text(54,y+66,clipped(focus['title'],bold[20],960),bold[20],accent)
         legend={s['letter']:s for s in focus['legend']}
         letters=focus['letters']
-        for i,g in enumerate(games[:15]):
-            x=84+i*65
-            draw.ellipse((x-24,y+104,x+24,y+152),fill=GROUP_BY_NUMBER[g['number']].color)
-            text(x,y+128,g['number'],bold[24],BG,'mm')
-            letter=letters[i] if i<len(letters) else '?'
-            color=legend.get(letter,{}).get('color',MUTED)
-            draw.rounded_rectangle((x-23,y+164,x+23,y+200),radius=9,fill='#0b1323',outline=color,width=2)
-            text(x,y+182,letter,bold[20],color,'mm')
-        text(54,y+218,'FULL SNAPSHOT  ·  read left → right, then down',fonts[18],MUTED)
         for i,g in enumerate(games):
-            if i%30==0: check()
-            x=70+(i%30)*32.4; cy=y+264+(i//30)*32
+            if i%10==0: check()
+            x=98+(i%10)*98; cy=y+132+(i//10)*96
             letter=letters[i] if i<len(letters) else '?'
             color=legend.get(letter,{}).get('color',MUTED)
-            if letter=='H':
-                draw.ellipse((x-12,cy-12,x+12,cy+12),fill=color)
-                draw.line([(x-6,cy),(x-1,cy+5),(x+7,cy-5)],fill=BG,width=2)
-            elif letter=='M':
-                draw.ellipse((x-12,cy-12,x+12,cy+12),outline=color,width=2)
-                draw.line((x-5,cy,x+5,cy),fill=MUTED,width=2)
+            rgb=tuple(int(color[j:j+2],16) for j in (1,3,5))
+            fill=tuple(int(c*.28+20) for c in rgb)
+            bounds=(x-30,cy-30,x+30,cy+30)
+            draw.ellipse(bounds,fill=fill)
+            if g.get('gap_before'):
+                for angle in range(0,360,30):
+                    draw.arc(bounds,angle,angle+17,fill=color,width=2)
             else:
-                draw.rounded_rectangle((x-13,cy-12,x+13,cy+12),radius=6,fill='#0b1323',outline=color)
-                text(x,cy,letter,fonts[16],color,'mm')
-            if g.get('gap_before'): draw.line((x+14,cy-11,x+14,cy+11),fill='#ffbd69',width=2)
-        ly=y+264+rows*32
+                draw.ellipse(bounds,outline=color,width=2)
+            if i==0:
+                draw.ellipse((x-34,cy-34,x+34,cy+34),outline=WHITE,width=2)
+            text(x,cy,letter,bold[24],WHITE,'mm')
+            state=g.get('new_repeat') or {}
+            tag_kind=state.get('kind')
+            tag='New' if tag_kind=='new' else 'Repeated' if tag_kind=='repeated' else state.get('reason','Not saved')
+            if i==0 and tag_kind and state.get('run'):
+                tag += ' · '+('N' if tag_kind=='new' else 'R')+'×'+str(state['run'])
+            tag_color='#99f6e4' if tag_kind=='new' else '#fde68a' if tag_kind=='repeated' else '#354159'
+            draw.rounded_rectangle((x-45,cy+37,x+45,cy+54),radius=4,fill=tag_color)
+            tag_font=next((fonts[size] for size in (13,11,10) if fonts[size].getlength(tag)<=86),fonts[10])
+            text(x,cy+45,clipped(tag,tag_font,86),tag_font,BG if tag_kind else WHITE,'mm')
+        ly=y+104+rows*96
         x=54
-        for state in focus['legend']:
+        shown_legend=TRACKS['color'][1] if focus['key']=='number' else focus['legend']
+        for state in shown_legend:
             label=f'{state["letter"]} {state["label"].split(" · ")[0]}'
             width=fonts[18].getlength(label)+30
             if x+width>1020: x=54; ly+=27
             draw.ellipse((x,ly+4,x+9,ly+13),fill=state['color'])
             text(x+16,ly,label,fonts[18],MUTED); x+=width
+        text(54,y+timeline_height-87,'New / Repeated compares the number with its previous 10 rounds.',fonts[16],MUTED)
+        text(54,y+timeline_height-61,'White ring = newest · Dashed circle = history gap · Not saved = legacy evidence',fonts[16],MUTED)
         latest=games[0].get('game_no','—')
-        text(54,y+timeline_height-34,clipped(f'AS OF #{latest}   ·   Amber divider = history gap',fonts[18],960),fonts[18],MUTED)
+        text(54,y+timeline_height-34,clipped(f'AS OF #{latest}   ·   Read left to right, then down',fonts[18],960),fonts[18],MUTED)
     text(40,height-43,'Frozen evidence  ·  Observed results, not a prediction',fonts[18],MUTED)
     text(1040,height-43,'LUCKY28',bold[20],accent,'ra')
     for quality in (85,75,65,55):

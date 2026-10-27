@@ -15,12 +15,14 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
   const browser = await chromium.launch({channel: 'chrome', headless: true});
   try {
     const page = await browser.newPage({viewport: {width: 1440, height: 1050}});
+    page.setDefaultTimeout(15000);
+    page.setDefaultNavigationTimeout(15000);
     const base = process.env.ALERT_TEST_URL;
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(base + '/alerts/groups/settings/');
     await expect(page.getByLabel('Red threshold', {exact:true})).toHaveValue('');
-    await page.getByLabel('Apply to all thresholds', {exact:true}).fill('3');
+    await page.getByLabel('Apply to all absence thresholds', {exact:true}).fill('3');
     await page.getByRole('button', {name:'Populate fields', exact:true}).click();
     await expect(page.getByLabel('Grey threshold', {exact:true})).toHaveValue('3');
     await page.getByLabel('Enable group absence delivery', {exact:true}).check();
@@ -38,7 +40,7 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
     await expect(page.getByText('Threshold reached', {exact:true})).toBeVisible();
     await expect(page.getByText('Alert already recorded this absence')).toBeVisible();
     await page.screenshot({path:'.local/group-absence-desktop.png', fullPage:true});
-    await page.getByRole('link', {name:'Edit thresholds', exact:true}).click();
+    await page.getByRole('link', {name:'Edit absence & ending thresholds', exact:true}).click();
     await expect(page.getByLabel('Red threshold', {exact:true})).toHaveValue('3');
     await page.setViewportSize({width:390, height:844});
     await page.getByLabel('Red threshold', {exact:true}).scrollIntoViewIfNeeded();
@@ -79,7 +81,7 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
     await page.getByRole('button', {name:'Save settings', exact:true}).click();
     await expect(page.getByText('Row, column and category settings saved and applied immediately.')).toBeVisible();
     await page.reload();
-    await expect(page.locator('.absence-enabled:checked')).toHaveCount(15);
+    await expect(page.locator('.absence-enabled:checked')).toHaveCount(19);
     await page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true}).uncheck();
     await page.getByRole('button', {name:'Save settings', exact:true}).click();
     await page.reload();
@@ -88,11 +90,13 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
     await page.getByRole('button', {name:'Save settings', exact:true}).click();
     await page.reload();
     await expect(page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true})).toBeChecked();
-    await expect(page.locator('.streak-enabled:checked')).toHaveCount(15);
+    await expect(page.locator('.streak-enabled:checked')).toHaveCount(19);
     await expect(page.getByLabel('Column 7 streak threshold', {exact:true})).toHaveValue('3');
+    await expect(page.getByLabel('Extreme edges · 0–5, 22–27 absence threshold', {exact:true})).toHaveValue('3');
+    await expect(page.getByLabel('Inner board center streak threshold', {exact:true})).toHaveValue('3');
     await page.getByLabel('Column 7 streak threshold', {exact:true}).fill('99');
     await page.getByRole('link', {name:'Cancel', exact:true}).click();
-    await expect(page.locator('table tbody tr')).toHaveCount(15);
+    await expect(page.locator('table tbody tr')).toHaveCount(19);
     await expect(page.getByText('SE — Small Even', {exact:true})).toBeVisible();
     await page.screenshot({path:'.local/category-alerts-desktop.png', fullPage:true});
     await page.getByRole('link', {name:'Edit category thresholds', exact:true}).click();

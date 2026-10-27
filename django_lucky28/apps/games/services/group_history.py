@@ -26,6 +26,8 @@ def definitions():
         add(group.id, group.name, 'Colors', group.numbers, group.color, 'color', group.name)
     add('edges', 'Edges', 'Range', (*range(6), *range(22, 28)), '#fbbf24', 'range', 'Edges · 0–5, 22–27')
     add('middle', 'Middle', 'Range', range(6, 22), '#94a3b8', 'range', 'Middle · 6–21')
+    add('border', 'Outer Edges', 'Border', (0, 1, 2, 3, 4, 5, 6, 7, 13, 14, 20, 21, 22, 23, 24, 25, 26, 27), '#f43f5e', 'border', 'Outer Edges · 18 numbers')
+    add('center', 'Inner Center', 'Border', (8, 9, 10, 11, 12, 15, 16, 17, 18, 19), '#06b6d4', 'border', 'Inner Center · 10 numbers')
     return groups
 
 

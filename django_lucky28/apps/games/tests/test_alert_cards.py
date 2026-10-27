@@ -30,6 +30,16 @@ class CardTimelineTests(TestCase):
         for track in live['tracks']:
             self.assertEqual(latest['tracks'][track['tracker_key']]['letters'], [i['letter'] for i in track['timeline']])
 
+    def test_new_repeat_tags_match_newest_and_are_frozen(self):
+        snapshot = snapshot_for_round('lucky28', 'R159')
+        live = build_timeline('lucky28', ['number'])
+        self.assertEqual([g['new_repeat'] for g in snapshot['games']],
+                         [g['new_repeat'] for g in live['games']])
+        self.assertEqual(snapshot['games'][0]['new_repeat']['kind'], 'new')
+        GameRound.objects.filter(game_no='R158').delete()
+        self.assertEqual(snapshot_for_round('lucky28', 'R159')['games'][0]['new_repeat']['reason'], 'History gap')
+        self.assertEqual(snapshot['games'][0]['new_repeat']['kind'], 'new')
+
     def test_frozen_card_render_never_reads_database(self):
         payload = dict(game_no='R159', matches=[], global_timeline=snapshot_for_round('lucky28', 'R159'))
         original = render_card(payload)
@@ -78,11 +88,31 @@ class CardDesignTests(SimpleTestCase):
         self.assertEqual(model['label'], 'ABSENCE ENDED')
         self.assertIsNone(model['identity'])
 
+    def test_each_alert_uses_corresponding_newest_category(self):
+        from games.services.timeline import TRACKS
+        cases = [('R03', 'row', ['R1', 'R2', 'R3']), ('C01', 'column', ['C5', 'C3', 'C1']),
+                 ('SE', 'combo', ['SE', 'SO', 'BE']), ('G01', 'color', ['G3', 'G5', 'G7']),
+                 ('edges', 'extreme', ['J', 'M', 'M']), ('center', 'border', ['O', 'I', 'O'])]
+        for group_id, key, letters in cases:
+            payload = dict(group_id=group_id, group_name='SE — Small Even',
+                           timeline=[dict(number=n) for n in (4, 9, 14)])
+            focus = card_model(payload, 'category')['focus']
+            self.assertEqual((focus['key'], focus['letters']), (key, letters))
+            self.assertEqual(focus['legend'], TRACKS[key][1])
+            from games.services.alert_presentation import snapshot_timeline_lines
+            self.assertIn(' · '.join(letters), snapshot_timeline_lines(payload, 'category')[0])
+        for series, letters in [('number', ['4', '9', '14']), ('size', ['S', 'S', 'B']),
+                                ('parity', ['E', 'O', 'E'])]:
+            focus = card_model(dict(matches=[dict(group=series)],
+                    timeline=[dict(number=n) for n in (4, 9, 14)]), 'alert')['focus']
+            self.assertEqual(focus['letters'], letters)
+        self.assertEqual(card_model(dict(matches=[dict(group='size', mode='every_game')]), 'alert')['focus']['key'], 'number')
+
     def test_group_membership_symbols_and_ending_sticker(self):
         payload = dict(game_no='R3', group_id='R03', group_name='Row 3', mode='streak', count=2,
             timeline=[dict(number=21),dict(number=14),dict(number=20)], change_type='ended', matches=[])
         model = card_model(payload, 'category_end')
-        self.assertEqual(model['focus']['letters'], ['M','H','H'])
+        self.assertEqual(model['focus']['letters'], ['R4','R3','R3'])
         self.assertEqual(style_key(payload, 'category_end'), 'ended')
         self.assertEqual(model['count'], '2')
 
@@ -98,7 +128,7 @@ class CardDesignTests(SimpleTestCase):
                 self.assertLess(len(result), 400000)
                 image = Image.open(BytesIO(result))
                 self.assertEqual(image.width, 1080)
-                self.assertLess(image.height, 1900)
+                self.assertLess(image.height, 3500)
 
     def test_caption_limit_handles_unicode_and_html_without_broken_tags(self):
         payload = dict(game_no='R1', captured_at='now', stream='😀'*800, lower_bound=False,

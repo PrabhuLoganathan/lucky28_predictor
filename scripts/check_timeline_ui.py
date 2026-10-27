@@ -27,13 +27,10 @@ const { execFileSync } = require('child_process');
     await expect(page.locator('.tl-recent-chip').first()).toHaveAttribute('data-round','R159');
     await expect(page.locator('.tl-recent-chip').last()).toHaveAttribute('data-round','R10');
     const viewport=page.locator('#tl-recent-viewport');
-    expect(await viewport.evaluate(n=>n.scrollHeight>n.clientHeight&&n.clientHeight<=260)).toBe(true);
-    await page.locator('.tl-recent-chip').last().scrollIntoViewIfNeeded();
-    await expect(page.locator('.tl-recent-chip').last()).toBeInViewport();
-    await expect(page.locator('#tl-recent-newest')).toBeEnabled();
-    await page.locator('#tl-recent-newest').click();
-    expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
-    await expect(page.locator('tr[data-track]')).toHaveCount(11);
+    expect(await viewport.evaluate(n=>getComputedStyle(n).overflowY === 'visible' || n.scrollHeight <= n.clientHeight)).toBe(true);
+    await expect(page.locator('.tl-recent-chip').first()).toBeVisible();
+    await expect(page.locator('.tl-recent-chip').last()).toBeVisible();
+    await expect(page.locator('tr[data-track]')).toHaveCount(12);
     await expect(page.locator('tr[data-track="size"] .tl-dot')).toHaveCount(25);
     await page.locator('tr[data-track="size"] .tl-dot').first().click();
     await expect(page.locator('#tl-detail')).toContainText('Game #R159');
@@ -62,20 +59,11 @@ const { execFileSync } = require('child_process');
     await expect(page.locator('#tl-status')).toContainText('Live');
     await expect(page.locator('tr[data-track="column"]')).toHaveCount(0);
     await page.evaluate(() => window.timelinePageMarker = 'same document');
-    const anchorBefore=await viewport.evaluate(n=>{
-      n.scrollTop=400;
-      const top=n.getBoundingClientRect().top;
-      const anchor=[...n.querySelectorAll('.tl-recent-chip')].find(c=>c.getBoundingClientRect().bottom>top);
-      return {id:anchor.dataset.round,offset:anchor.getBoundingClientRect().top-top};
-    });
     execFileSync(process.env.TIMELINE_TEST_PYTHON, ['django_lucky28/manage.py', 'shell', '-c',
       'from games.models import GameRound; from django.utils import timezone; GameRound.objects.create(game_no="R160", game_type="lucky28", winning_number=27, has_winner=True, status=3, winner_event_ts=timezone.now())'], {stdio:'pipe'});
     await expect(page.locator('#tl-status')).toContainText('#R160', {timeout:12000});
     await expect(page.locator('.tl-recent-chip')).toHaveCount(150);
-    const anchorAfter=await viewport.evaluate((n,id)=>n.querySelector(`[data-round="${id}"]`).getBoundingClientRect().top-n.getBoundingClientRect().top,anchorBefore.id);
-    expect(Math.abs(anchorAfter-anchorBefore.offset)).toBeLessThan(2);
-    await page.locator('#tl-recent-newest').click();
-    expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
+    await expect(page.locator('.tl-recent-chip').first()).toHaveAttribute('data-round','R160');
     await expect(page.locator('.tl-recent-chip').last()).toHaveAttribute('data-round','R11');
     await expect(page.locator('#tl-range')).toContainText('of 150 / 150');
     if (await page.evaluate(() => window.timelinePageMarker) !== 'same document') throw new Error('Polling reloaded the page');
@@ -147,7 +135,8 @@ const { execFileSync } = require('child_process');
       ['Board rows',recentNumbers.map(n=>'R'+(Math.floor(n/7)+1)),4],
       ['Board columns',recentNumbers.map(n=>'C'+(n%7+1)),7],
       ['Colors',['G5','G7','G3','G7','G5','G5','G7','G5','G7','G6'],7],
-      ['Extreme numbers',recentNumbers.map(n=>n<=5||n>=22?'J':'M'),2]
+      ['Extreme numbers',recentNumbers.map(n=>n<=5||n>=22?'J':'M'),2],
+      ['Board border',recentNumbers.map(n=>(n<7||n>=21||n%7===0||n%7===6)?'O':'I'),2]
     ];
     for(const [name,labels,legendCount] of addedViews){
       await recentView.click();expect(await recentLabels()).toEqual(labels);
@@ -165,7 +154,7 @@ const { execFileSync } = require('child_process');
     await page.locator('[data-round="P7"]').focus();await page.locator('#tl-recent-details').click();
     await expect(page.locator('#tl-recent-info')).toContainText('Number 4 · Small (S) · Even (E) · SE · #P7');
     await expect(page.locator('.tl-recent-round-link')).toHaveAttribute('href',/P7/);
-    await expect(page.locator('#tl-recent-info')).toContainText('Row 1 · Column 5 · Magenta · Edges (0–5, 22–27)');
+    await expect(page.locator('#tl-recent-info')).toContainText('Row 1 · Column 5 · Magenta · Edges (0–5, 22–27) · Outer edges (18)');
     await page.locator('#tl-recent-details').click();await expect(page.locator('#tl-recent-info')).toBeHidden();
     // No duplicate statistics or explanation sits between the board and Newest.
     expect(await page.locator('.tl-board-scroller').evaluate(n=>n.nextElementSibling.id)).toBe('tl-recent-results');
@@ -173,6 +162,15 @@ const { execFileSync } = require('child_process');
     expect(await page.locator('.tl-palette-layout').evaluate(n=>n.nextElementSibling.id)).toBe('tl-row-column-summary');
 
     await expect(page.locator('#tl-palette input,.tl-overlap,.tl-match-strips,.tl-match-controls')).toHaveCount(0);
+    await page.locator('#tl-clear-all').click();expect(await selectedNumbers()).toEqual([]);
+    await expect(page.locator('#tl-select-all')).toContainText('Select All');
+    await page.locator('#tl-select-all').click();expect((await selectedNumbers()).length).toBe(28);
+    await expect(page.locator('#tl-select-all')).toContainText('Deselect All');
+    await page.locator('#tl-select-all').click();expect(await selectedNumbers()).toEqual([]);
+    await page.locator('#tl-select-border').click();expect((await selectedNumbers()).length).toBe(18);
+    await page.locator('#tl-select-center').click();expect((await selectedNumbers()).length).toBe(28);
+    await page.locator('#tl-clear-all').click();expect(await selectedNumbers()).toEqual([]);
+    await group('recent').click();expect((await selectedNumbers()).length).toBe(8);
     await group('recent').click();expect(await selectedNumbers()).toEqual([]);
     await expect(page.locator('#tl-selection-status')).toContainText('Mode: Manual');
     await expect(page.locator('#tl-probability-status')).toContainText('0.00% versus 100.00%');

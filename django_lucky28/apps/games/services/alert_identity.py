@@ -13,6 +13,11 @@ def group_identity(payload):
         if category.family == 'Columns':
             return dict(family='COLUMN', accent='#ffbd69', icon='column', badge=f'C{int(group_id[1:])}',
                         symbol='↕️', title=category.name)
+        if category.family in ('Extreme numbers', 'Board border'):
+            badge, color = {'edges': ('J', '#fbbf24'), 'middle': ('M', '#94a3b8'),
+                            'border': ('O', '#f43f5e'), 'center': ('I', '#06b6d4')}[group_id]
+            return dict(family='EXTREME NUMBER' if category.family == 'Extreme numbers' else 'BOARD BORDER',
+                        accent=color, icon='drought', badge=badge, symbol='▦', title=category.name)
         return dict(family='COMBINATION', accent='#c29aff', icon='combination', badge=group_id,
                     symbol='🔷', title=category.name)
     color = GROUP_BY_ID.get(group_id)

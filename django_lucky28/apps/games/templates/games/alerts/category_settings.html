@@ -1,7 +1,7 @@
 {% extends 'games/alerts/layout.html' %}
 {% block alert_content %}
 <style>#category-settings .table-responsive{position:relative}#category-settings .category-threshold{min-width:5rem}</style>
-<h2 class="alert-page-title">Rows, columns &amp; SE/BE/BO/SO — settings</h2>
+<h2 class="alert-page-title">Rows, columns, combinations, extremes &amp; border — settings</h2>
 <p class="mt-2">Stream: <strong>{{ config.stream_id }}</strong>. Set absence and consecutive-streak alerts independently. Supported thresholds: 1–{{ maximum }} whole completed rounds.</p>
 <form method="post" class="alert-form" id="category-settings">{% csrf_token %}
 {{ form.non_field_errors }}

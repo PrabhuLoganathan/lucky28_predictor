@@ -2,7 +2,7 @@
 from django.db.models import Q
 
 from .group_absence import stream_games, valid_result
-from .timeline import LIMIT, TRACKS, adjacent, classify
+from .timeline import LIMIT, TRACKS, adjacent, classify, new_repeat_history
 
 
 def snapshot_from_games(games):
@@ -10,11 +10,12 @@ def snapshot_from_games(games):
     history = [game for game in games if valid_result(game)]
     games = history[:LIMIT + 9]
     visible = games[:LIMIT]
-    keys = ('size', 'parity', 'combo', 'color', 'row', 'column', 'extreme', 'repeat', 'window')
-    return dict(version=2, limit=LIMIT, latest_game_id=visible[0].game_no if visible else None,
+    tags = new_repeat_history(history)
+    keys = ('number', 'size', 'parity', 'combo', 'color', 'row', 'column', 'extreme', 'border', 'repeat', 'window')
+    return dict(version=3, limit=LIMIT, latest_game_id=visible[0].game_no if visible else None,
         gap_analytics=capture_gaps(history),
         games=[dict(game_no=g.game_no, number=g.winning_number, timestamp=g.winner_event_ts.isoformat(),
-                    gap_before=i + 1 < len(games) and not adjacent(g, games[i + 1])) for i, g in enumerate(visible)],
+                    new_repeat=tags[i], gap_before=i + 1 < len(games) and not adjacent(g, games[i + 1])) for i, g in enumerate(visible)],
         tracks={key: dict(title=TRACKS[key][0], legend=TRACKS[key][1],
                          letters=[classify(key, games, i) for i in range(len(visible))]) for key in keys})
 

@@ -103,6 +103,18 @@ class AlertIntegrationTests(TestCase):
         self.assertEqual(AlertDelivery.objects.filter(kind='alert').count(), 1)
         self.assertEqual(AlertDelivery.objects.filter(kind='result').count(), 1)
 
+    def test_each_matching_rule_gets_its_own_card_but_one_round_result(self):
+        AlertRule.objects.create(key='even_streak', title='Even streak', series='parity',
+                                 mode='streak', values=['Even'], threshold=2)
+        self.history()
+        self.event()
+        cards = list(AlertDelivery.objects.filter(kind='alert'))
+        self.assertEqual(len(cards), 2)
+        self.assertEqual({d.payload['matches'][0]['group'] for d in cards}, {'size', 'parity'})
+        self.assertTrue(all(len(d.payload['matches']) == 1 for d in cards))
+        self.event(phase='winner', observed=self.now + timedelta(seconds=2), winning_number=1, status=3)
+        self.assertEqual(AlertDelivery.objects.filter(kind='result').count(), 1)
+
     def test_active_condition_rearms_after_break_and_revision(self):
         self.history()
         _, first = self.pre()

@@ -46,6 +46,20 @@ def examples():
         global_timeline=snapshot(ended), matches=[dict(title='Row 3 streak ended · Number 21',
             detail='Result 21 is outside Row 3. The run ended after 7 consecutive appearances.', group='category', mode='breaker')])
 
+    from games.category_config import CATEGORY_BY_ID
+    from games.group_config import GROUP_BY_ID
+    for name, group_id in [('rows', 'R03'), ('columns', 'C01'), ('combinations', 'SE'),
+                           ('colors', 'G04'), ('extremes', 'edges'), ('border', 'border')]:
+        group = CATEGORY_BY_ID.get(group_id) or GROUP_BY_ID[group_id]
+        yield name, 'group' if group_id.startswith('G') else 'category', dict(common,
+            group_id=group_id, group_name=group.name, color=group.name, mode='absence', count=8,
+            numbers=list(group.numbers), global_timeline=snapshot(repeated))
+    for series in ('number', 'size', 'parity'):
+        yield series, 'alert', dict(common, global_timeline=snapshot(repeated),
+            matches=[dict(group=series, mode='absence', title=series.title()+' absence',
+                          detail='Fictional preview of the category timeline.', observed=8,
+                          values={'number':['0'], 'size':['Small'], 'parity':['Even']}[series])])
+
 
 def main():
     directory = ROOT / '.local' / 'telegram-card-previews'

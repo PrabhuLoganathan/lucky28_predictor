@@ -92,9 +92,9 @@
 .tl-summary-disclosure:not([open]) .tl-compact-metrics{display:none}
 @media(max-width:600px){.tl-recent-heading button,.tl-recent-heading select{min-height:44px}.tl-summary-disclosure .tl-compact-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-/* Scroll through 150 results; ten circles per row, five on narrow screens. */
+/* Static presentation of 150 results in bottom panel; visible in one shot without scroll. */
 .tl-recent-results{container-type:inline-size;container-name:newest}
-.tl-recent-viewport{max-height:260px;overflow-y:auto;overflow-x:hidden;overflow-anchor:none;overscroll-behavior-y:contain;scrollbar-width:thin;scrollbar-color:#8970b1 #211b30}
+.tl-recent-viewport{max-height:none;overflow:visible}
 .tl-recent-viewport:focus-visible{outline:2px solid #d7c1f5;outline-offset:2px}
 .tl-recent-chips{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:clamp(4px,1cqw,12px);overflow:visible;width:100%;padding:8px 0}
 .tl-recent-chip{width:100%;height:auto;aspect-ratio:1;min-width:0;min-height:0}

@@ -39,6 +39,18 @@ def card_lines(text, font, width):
     return lines
 
 
+def snapshot_timeline_lines(payload, kind):
+    """Text fallback uses the same category as the image card."""
+    from .alert_card import focus_track
+    snapshot = payload.get('global_timeline') or dict(games=payload.get('timeline', []))
+    games = [g for g in snapshot.get('games', []) if type(g.get('number')) is int and 0 <= g['number'] <= 27]
+    if not games:
+        return []
+    focus = focus_track(payload, kind, dict(games=games[:15]))
+    sequence = ' · '.join(focus['letters'])
+    return [f'🧭 {focus["title"]} snapshot (newest {min(len(games), 15)}): {sequence}']
+
+
 def format_message(payload, kind='alert', limit=4096):
     """Symbol-first text, with whole HTML lines within Telegram's UTF-16 budget."""
     from .alert_card import symbol_for
@@ -47,6 +59,9 @@ def format_message(payload, kind='alert', limit=4096):
     if games:
         lines = message.split('\n')
         lines.insert(2, f'🧭 Timeline snapshot: {len(games)} / 150 games · newest first')
+        snap_lines = snapshot_timeline_lines(payload, kind)
+        for offset, snap_line in enumerate(snap_lines):
+            lines.insert(3 + offset, escape(snap_line))
         message = '\n'.join(lines)
     from .card_gaps import gap_sections, gap_label
     sections = gap_sections(payload, kind, payload.get('global_timeline', {}))

@@ -36,6 +36,9 @@
     (!key.includes('E') || n%2===0) && (!key.includes('O') || n%2===1))));
   for(let i=0;i<4;i++) memberships.set(`R0${i+1}`,universe.filter(n=>Math.floor(n/7)===i));
   for(let i=0;i<7;i++) memberships.set(`C0${i+1}`,universe.filter(n=>n%7===i));
+  memberships.set('border',universe.filter(n=>Math.floor(n/7)===0||Math.floor(n/7)===3||n%7===0||n%7===6));
+  memberships.set('center',universe.filter(n=>Math.floor(n/7)>0&&Math.floor(n/7)<3&&n%7>0&&n%7<6));
+  memberships.set('all',universe);
   const selections = new Map(), groupButtons = new Map();
   let recentMembers = [], historyReady = false;
   function selectionState() {
@@ -60,7 +63,13 @@
   const selectionToolbar=make('div',undefined,'tl-selection-toolbar');
   const selectionStatus=make('p','Mode: Auto last 10');selectionStatus.id='tl-selection-status';selectionStatus.setAttribute('role','status');
   const selectionControls=make('div',undefined,'tl-selection-controls');
-  selectionControls.append(groupButton('recent','Last 10'),groupButton('absent','Absent in last 10'));
+  const selectAllBtn=groupButton('all','Select All');selectAllBtn.id='tl-select-all';selectAllBtn.title='Select all 28 numbers / Deselect all';
+  const clearAllBtn=button('',()=>{const state=selectionState();state.mode='manual';state.numbers.clear();renderPalette();});
+  clearAllBtn.className='tl-selection-group tl-clear-all';clearAllBtn.id='tl-clear-all';
+  clearAllBtn.append(make('span','Clear All'),make('small','0/28'));clearAllBtn.title='Unselect all numbers';
+  const borderBtn=groupButton('border','Outer Edges');borderBtn.id='tl-select-border';borderBtn.title='Outer 4 edges: Row 1, Row 4, Col 1, Col 7 (18 numbers)';
+  const centerBtn=groupButton('center','Inner Center');centerBtn.id='tl-select-center';centerBtn.title='Inner core numbers: Rows 2–3, Cols 2–6 (10 numbers)';
+  selectionControls.append(selectAllBtn,clearAllBtn,borderBtn,centerBtn,groupButton('recent','Last 10'),groupButton('absent','Absent in last 10'));
   selectionToolbar.append(selectionStatus,selectionControls);
   const filterBar=make('div',undefined,'tl-palette-filters');filterBar.setAttribute('aria-label','Category selection and metrics');
   const quickFilters=make('div',undefined,'tl-quick-filters');
@@ -161,8 +170,8 @@
   const boardObserver=new ResizeObserver(updateBoardHint);boardObserver.observe(scroller);boardObserver.observe(frame);
 
   // Reuse round buttons across polls so keyboard focus stays on the same round.
-  const recentModes=['Number','Size','Parity','Combination','Board rows','Board columns','Colors','Extreme numbers'];
-  const recentTracks=['number','size','parity','combo','row','column','color','extreme'];
+  const recentModes=['Number','Size','Parity','Combination','Board rows','Board columns','Colors','Extreme numbers','Board border'];
+  const recentTracks=['number','size','parity','combo','row','column','color','extreme','border'];
   const boardColors=['#38bdf8','#a78bfa','#34d399','#fbbf24','#fb923c','#f472b6','#94a3b8'];
   // Match the timeline's category colors even when those tracks are hidden.
   const recentCategoryLegends={
@@ -176,7 +185,7 @@
   const recentView=button('View: Number ↻',cycleRecentView);recentView.id='tl-recent-view';
   const recentDetails=button('Game details',()=>{recentInfo.hidden=!recentInfo.hidden;updateRecentDetails();});recentDetails.id='tl-recent-details';
   recentDetails.setAttribute('aria-controls','tl-recent-info');recentDetails.setAttribute('aria-expanded','false');
-  const recentNewest=button('Back to newest',()=>{recentViewport.scrollTop=0;updateRecentScroll();});recentNewest.id='tl-recent-newest';
+  const recentNewest=button('Back to newest',()=>{recentViewport.scrollTop=0;recentChips.firstElementChild?.scrollIntoView({behavior:'smooth',block:'nearest'});updateRecentScroll();});recentNewest.id='tl-recent-newest';
   recentNewest.setAttribute('aria-controls','tl-recent-viewport');
   const recentSelect=make('select');recentSelect.id='tl-recent-select';
   recentSelect.setAttribute('aria-label','Newest display');recentSelect.setAttribute('aria-controls','tl-recent-viewport');
@@ -184,10 +193,13 @@
   recentSelect.addEventListener('change',()=>{recentMode=Number(recentSelect.value);renderRecent(recentSnapshot);});
   recentHeading.append(recentCaption,recentSelect,recentView,recentDetails,recentNewest);
   const recentViewport=make('div',undefined,'tl-recent-viewport');recentViewport.id='tl-recent-viewport';recentViewport.tabIndex=0;
-  recentViewport.setAttribute('role','region');recentViewport.setAttribute('aria-label','Latest 150 available results, newest first. Scroll down for older rounds and up for newer rounds.');
-  const recentChips=make('div',undefined,'tl-recent-chips');recentChips.setAttribute('role','group');recentChips.setAttribute('aria-label','Recent results; activate a circle to cycle all results through number, size, parity, combination, board rows, board columns, colors and extreme numbers');
+  recentViewport.setAttribute('role','region');recentViewport.setAttribute('aria-label','Latest 150 available results, newest first.');
+  const recentChips=make('div',undefined,'tl-recent-chips');recentChips.setAttribute('role','group');recentChips.setAttribute('aria-label','Recent results; activate a circle to cycle all results through number, size, parity, combination, board rows, board columns, colors, extreme numbers and board border');
   recentViewport.append(recentChips);
-  function updateRecentScroll(){recentNewest.disabled=recentViewport.scrollTop<=2;}
+  function updateRecentScroll(){
+    const isScrollable=recentViewport.scrollHeight>recentViewport.clientHeight&&getComputedStyle(recentViewport).overflowY!=='visible';
+    recentNewest.disabled=isScrollable?recentViewport.scrollTop<=2:false;
+  }
   recentViewport.addEventListener('scroll',updateRecentScroll,{passive:true});
   const recentNotice=make('p',undefined,'tl-recent-notice');recentNotice.id='tl-recent-notice';
   const recentInfo=make('div',undefined,'tl-recent-info');recentInfo.id='tl-recent-info';recentInfo.hidden=true;
@@ -205,6 +217,9 @@
     if(recentMode===7)return [
       {key:'J',label:'Edges · 0–5, 22–27',color:'#fbbf24'},
       {key:'M',label:'Middle · 6–21',color:'#94a3b8'}];
+    if(recentMode===8)return [
+      {key:'O',label:'Outer edges · 18 numbers',color:'#f43f5e'},
+      {key:'I',label:'Inner center · 10 numbers',color:'#06b6d4'}];
     return recentCategoryLegends[recentModes[recentMode]].map(([key,label,color])=>({key,label,
       color:data?.tracks?.find(item=>item.tracker_key===track)?.legend.find(item=>item.letter===key)?.color??color}));
   }
@@ -216,17 +231,19 @@
   function recentClassification(game) {
     const size=game.number<14?'S':'B',parity=game.number%2===0?'E':'O';
     const color=(data?.group_stats??[]).find(group=>group.family==='Colors' && group.numbers.includes(game.number));
+    const isBorder=game.number<7||game.number>=21||game.number%7===0||game.number%7===6;
     return {size,parity,combo:size+parity,row:`R${Math.floor(game.number/7)+1}`,column:`C${game.number%7+1}`,
       color:color?`G${Number(color.key.slice(1))}`:'?',colorName:color?.label??'Color unavailable',
-      extreme:game.number<=5 || game.number>=22?'J':'M'};
+      extreme:game.number<=5 || game.number>=22?'J':'M',
+      border:isBorder?'O':'I'};
   }
   function focusRecent(game) {recentFocused=game.game_no;recentRecord=game;updateRecentDetails();}
   function updateRecentDetails() {
     recentDetails.disabled=!recentRecord;
     recentDetails.setAttribute('aria-expanded',String(!recentInfo.hidden));
     if(!recentRecord){recentInfo.hidden=true;recentDetails.setAttribute('aria-expanded','false');recentInfoText.textContent='';recentLink.removeAttribute('href');return;}
-    const {size,parity,combo,row,column,colorName,extreme}=recentClassification(recentRecord);
-    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–5, 22–27)':'Middle (6–21)'}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
+    const {size,parity,combo,row,column,colorName,extreme,border}=recentClassification(recentRecord);
+    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–5, 22–27)':'Middle (6–21)'} · ${border==='O'?'Outer edges (18)':'Inner center (10)'}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
     recentLink.textContent=`Open round #${recentRecord.game_no} ↗`;recentLink.href=recentRecord.url;
     recentDetails.title=`Details for round #${recentRecord.game_no}`;
   }
@@ -262,7 +279,7 @@
         control.addEventListener('focus',()=>focusRecent(control.roundRecord));recentNodes.set(game.game_no,control);
       }
       control.roundRecord=game;
-      const classification=recentClassification(game),{size,parity,combo,row,column,colorName,extreme}=classification;
+      const classification=recentClassification(game),{size,parity,combo,row,column,colorName,extreme,border}=classification;
       const label=recentMode===0?game.number:classification[recentTracks[recentMode]];
       const colorGroup=colors.find(item=>recentMode===0?item.numbers.includes(game.number):item.key===label);
       control.style.setProperty('--recent-color',colorGroup?.color??'#aab0bb');
@@ -274,7 +291,7 @@
       badge.dataset.kind=kind??'unknown';
       badge.title=kind?'Compared with the ten completed rounds before this result.':'Ten continuous prior results are required.';
       control.classList.toggle('is-latest',index===0);control.classList.toggle('has-gap',Boolean(game.gap_before));
-      control.title=`${index===0?'Newest · ':''}#${game.game_no} · Number ${game.number} · ${size} · ${parity} · ${combo} · ${row} · ${column} · ${colorName} · ${extreme==='J'?'Edges':'Middle'} · ${formatTime(game.timestamp)} · ${badge.textContent}${game.gap_before?' · history gap before this round':''}`;
+      control.title=`${index===0?'Newest · ':''}#${game.game_no} · Number ${game.number} · ${size} · ${parity} · ${combo} · ${row} · ${column} · ${colorName} · ${extreme==='J'?'Edges':'Middle'} · ${border==='O'?'Outer':'Inner'} · ${formatTime(game.timestamp)} · ${badge.textContent}${game.gap_before?' · history gap before this round':''}`;
       control.setAttribute('aria-label',`${control.title}. Showing ${recentModes[recentMode]} ${label}. Activate to show ${recentModes[(recentMode+1)%recentModes.length]} for all results.`);
       // Inserting a new round leaves unchanged nodes in place.
       if(recentChips.children[index]!==control)recentChips.insertBefore(control,recentChips.children[index]??null);
@@ -462,10 +479,13 @@
     const state=selectionState(),latestNumber=recent[0]?.number??null;
     if(state.mode==='auto' && available)state.numbers=new Set(recentMembers);
     selectionStatus.textContent=`Mode: ${state.mode==='auto'?'Auto last 10':'Manual'} · ${state.numbers.size} selected · ${counts.size} recent distinct${paletteStaleMessage?' · '+(available?'last loaded data':'waiting for history'):''}`;
+    clearAllBtn.disabled=state.numbers.size===0;
+    clearAllBtn.querySelector('small').textContent=`${state.numbers.size}/28`;
     groupButtons.forEach(({control,label},key)=>{
       const members=membersFor(key),count=members.filter(n=>state.numbers.has(n)).length,full=members.length>0&&count===members.length;
       control.disabled=!members.length;control.setAttribute('aria-pressed',String(full));
       control.querySelector('small').textContent=`${count}/${members.length}`;
+      if(key==='all')control.querySelector('span').textContent=full?'Deselect All':'Select All';
       control.setAttribute('aria-label',`${full?'Deselect':'Select'} ${label}: ${count} of ${members.length} selected`);
     });
     root.querySelector('.tl-palette-section').classList.toggle('stale',Boolean(paletteStaleMessage));el('palette').setAttribute('aria-busy','false');
