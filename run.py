@@ -115,6 +115,7 @@ def main():
     run([python, ROOT / 'django_lucky28/manage.py', 'sync_group_absence'])
     run([python, ROOT / 'django_lucky28/manage.py', 'sync_window_alerts'])
     run([python, ROOT / 'django_lucky28/manage.py', 'sync_category_alerts'])
+    run([python, ROOT / 'django_lucky28/manage.py', 'sync_tip_alerts'])
     if args.setup:
         run([python, ROOT / 'django_lucky28/manage.py', 'seed_alert_rules'])
         print('Setup complete. Start both services with: python3 run.py')

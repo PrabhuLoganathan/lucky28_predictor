@@ -25,12 +25,14 @@ def eligible_destinations(now):
     return AlertDestination.objects.filter(enabled=True).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
 
 
-def game_facts(history):
+def game_facts(history, upcoming=None):
+    from .tips import tip_facts
     return {
         'size': [g.size_label for g in history],
         'parity': [g.parity_label for g in history],
         'color': [AnalysisService.get_color(g.winning_number) for g in history],
         'number': [str(g.winning_number) for g in history],
+        'tip': tip_facts(history, upcoming),
     }
 
 
@@ -97,7 +99,7 @@ def record_live_event(game, phase):
               completed.values('winning_number').annotate(total=Count('pk'))}
     session_start = settings.SERVER_SESSION_STARTED_AT
     session_history = [g for g in history if g.winner_event_ts >= session_start]
-    facts, session_facts = game_facts(history), game_facts(session_history)
+    facts, session_facts = game_facts(history, game), game_facts(session_history, game)
     previous = AlertEvaluation.objects.order_by('-observed_at', '-pk').first()
     prior = previous.active_keys if previous else []
     matches = []

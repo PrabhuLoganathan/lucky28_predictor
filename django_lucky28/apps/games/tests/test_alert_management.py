@@ -69,7 +69,7 @@ class AlertManagementTests(TestCase):
 
     def test_defaults_and_filters_keep_existing_edits(self):
         self.client.post('/alerts/rules/defaults/')
-        self.assertEqual(AlertRule.objects.count(), 79)
+        self.assertEqual(AlertRule.objects.count(), 81)
         rule = AlertRule.objects.get(key='number_0_drought')
         rule.threshold = 70
         rule.save()

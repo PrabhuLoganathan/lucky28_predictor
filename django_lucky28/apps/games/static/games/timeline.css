@@ -128,3 +128,9 @@
 .tl-palette-section :is(.tl-palette-result-tag,.tl-new-repeat)[data-kind=new]{background:#99f6e4;color:#083b38;border-radius:4px;font-weight:700}
 .tl-palette-section :is(.tl-palette-result-tag,.tl-new-repeat)[data-kind=repeated]{background:#fde68a;color:#49320a;border-radius:4px;font-weight:700}
 .tl-palette-section :is(.tl-palette-result-tag,.tl-new-repeat)[data-kind=unknown]{background:#302b3c;color:#d0c8db;border-radius:4px}
+
+/* Settlement overlays preserve category fills, gap dashes and newest rings. */
+.tl-dot.tl-tip-game,.tl-recent-chip .tl-recent-circle.tl-tip-game{position:relative;border-color:#f5c542;border-width:3px}
+.tl-tip-star{position:absolute;right:-5px;top:-6px;display:flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid #151c2a;border-radius:50%;background:#f5c542;color:#201900;font-size:10px;line-height:1;font-weight:900;pointer-events:none}
+.tl-recent-circle .tl-tip-star{right:-3px;top:-4px;width:clamp(14px,2.4cqw,22px);height:clamp(14px,2.4cqw,22px);font-size:clamp(10px,1.7cqw,15px)}
+.timeline-widget .tl-tip-legend{color:#f5c542;font-size:.75rem}

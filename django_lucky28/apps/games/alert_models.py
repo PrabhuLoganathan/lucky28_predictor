@@ -9,7 +9,7 @@ class AlertRule(models.Model):
     MODES = [(s, s.replace('_', ' ').title()) for s in (
         'every_game', 'streak', 'absence', 'density', 'density_low', 'breaker', 'alternating',
     )]
-    SERIES = [(s, s.title()) for s in ('size', 'parity', 'color', 'number')]
+    SERIES = [(s, s.title()) for s in ('size', 'parity', 'color', 'number', 'tip')]
     key = models.SlugField(max_length=80, unique=True)
     title = models.CharField(max_length=120)
     series = models.CharField(max_length=16, choices=SERIES)
@@ -27,7 +27,7 @@ class AlertRule(models.Model):
         super().clean()
         allowed = {'size': {'Big', 'Small'}, 'parity': {'Odd', 'Even'},
                    'color': {'Red', 'Yellow', 'Pink', 'Blue', 'Cyan', 'Green', 'Grey'},
-                   'number': {str(n) for n in range(28)}}
+                   'number': {str(n) for n in range(28)}, 'tip': {'TIP', 'NO_TIP'}}
         if not isinstance(self.values, list) or any(not isinstance(v, str) or v not in allowed.get(self.series, set()) for v in self.values):
             raise ValidationError({'values': 'Use a list of exact values for the selected series.'})
         if self.mode != 'every_game' and not self.values:

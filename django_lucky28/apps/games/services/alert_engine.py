@@ -42,6 +42,12 @@ def evaluate_rules(rules, facts, prior_active=()):
         else:
             continue
         if matched:
+            if rule.series == 'tip':
+                target = ', '.join(rule.values)
+                if mode == 'absence':
+                    detail = f'No {target} games in the last {count} consecutive completed rounds. Trigger: {rule.threshold}.'
+                elif mode == 'density_low':
+                    detail = f'{count} {target} games in the last {rule.window} consecutive completed rounds (at most {rule.threshold}).'
             identity = f'{rule.key}:{rule.revision}:global'
             matches.append(dict(identity=identity, rule_key=rule.key, revision=rule.revision,
                                 title=label_color_groups(rule.title) if rule.series == 'color' else rule.title,
@@ -56,6 +62,7 @@ def evaluate_rules(rules, facts, prior_active=()):
 
 def default_rules():
     yield dict(key='all_games', title='Every new round', series='number', mode='every_game', enabled=False)
+    yield from tip_rules()
     for series, values in [('size', ['Big', 'Small']), ('parity', ['Odd', 'Even']),
                            ('color', ['Red', 'Yellow', 'Pink', 'Blue', 'Cyan', 'Green', 'Grey'])]:
         for value in values:
@@ -75,3 +82,10 @@ def default_rules():
     for number in range(28):
         yield dict(key=f'number_{number}_drought', title=f'Number {number} drought', series='number',
                    mode='absence', values=[str(number)], threshold=50, min_plan_rank=2)
+
+
+def tip_rules():
+    yield dict(key='tip_absence_3', title='TIP absent for 3 consecutive games', series='tip',
+               mode='absence', values=['TIP'], threshold=3, window=0, enabled=True)
+    yield dict(key='tip_density_low_10', title='TIP low density — at most 3 in 10', series='tip',
+               mode='density_low', values=['TIP'], threshold=3, window=10, enabled=True)

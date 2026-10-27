@@ -244,8 +244,24 @@
     if(!recentRecord){recentInfo.hidden=true;recentDetails.setAttribute('aria-expanded','false');recentInfoText.textContent='';recentLink.removeAttribute('href');return;}
     const {size,parity,combo,row,column,colorName,extreme,border}=recentClassification(recentRecord);
     recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–5, 22–27)':'Middle (6–21)'} · ${border==='O'?'Outer edges (18)':'Inner center (10)'}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
+    recentInfoText.textContent += ` · ${tipDescription(recentRecord)}`;
     recentLink.textContent=`Open round #${recentRecord.game_no} ↗`;recentLink.href=recentRecord.url;
     recentDetails.title=`Details for round #${recentRecord.game_no}`;
+  }
+  function tipDescription(game) {
+    const tip = game.tip;
+    if (tip?.status === 'TIP') return `TIP: ${tip.amount.toLocaleString()} diamonds (${tip.percent.toFixed(4)}%)`;
+    if (tip?.status === 'NO_TIP') return 'No tip: final bets equal final prizes';
+    return 'Tip status unavailable: final settlement totals are not verified';
+  }
+  function decorateTipCircle(circle, game) {
+    const isTip = game.tip?.status === 'TIP';
+    circle.classList.toggle('tl-tip-game', isTip);
+    if (isTip) {
+      const marker = make('sup', '★', 'tl-tip-star');
+      marker.setAttribute('aria-hidden', 'true');
+      circle.append(marker);
+    }
   }
   function cycleRecentView() {recentMode=(recentMode+1)%recentModes.length;renderRecent(recentSnapshot);}
   function renderRecent(recent) {
@@ -285,6 +301,8 @@
       control.style.setProperty('--recent-color',colorGroup?.color??'#aab0bb');
       control.dataset.colorGroup=colorGroup?.key??'unknown';
       control.firstChild.textContent=label;
+      decorateTipCircle(control.firstChild, game);
+      control.classList.toggle('is-tip', game.tip?.status === 'TIP');
       const observation=game.new_repeat,kind=observation?.kind;
       const badge=control.querySelector('.tl-new-repeat');
       badge.textContent=resultTagText(game,index===0);
@@ -292,6 +310,7 @@
       badge.title=kind?'Compared with the ten completed rounds before this result.':'Ten continuous prior results are required.';
       control.classList.toggle('is-latest',index===0);control.classList.toggle('has-gap',Boolean(game.gap_before));
       control.title=`${index===0?'Newest · ':''}#${game.game_no} · Number ${game.number} · ${size} · ${parity} · ${combo} · ${row} · ${column} · ${colorName} · ${extreme==='J'?'Edges':'Middle'} · ${border==='O'?'Outer':'Inner'} · ${formatTime(game.timestamp)} · ${badge.textContent}${game.gap_before?' · history gap before this round':''}`;
+      control.title += ` · ${tipDescription(game)}`;
       control.setAttribute('aria-label',`${control.title}. Showing ${recentModes[recentMode]} ${label}. Activate to show ${recentModes[(recentMode+1)%recentModes.length]} for all results.`);
       // Inserting a new round leaves unchanged nodes in place.
       if(recentChips.children[index]!==control)recentChips.insertBefore(control,recentChips.children[index]??null);
@@ -538,6 +557,7 @@
     if (!game) {container.textContent = 'Select a result to see its game details and recorded alerts.'; return;}
     const link = make('a', `Game #${game.game_no} ↗`); link.href = game.url;
     container.append(link, make('span', ` · Number ${game.number} · ${new Date(game.timestamp).toLocaleString()}`));
+    container.append(make('p', tipDescription(game)));
     if (game.gap_before) container.append(make('p', 'History gap before this game. Pattern calculations stop at this boundary.'));
     const classifications = data.tracks.filter(t => t.tracker_key !== 'alerts').map(track => {
       const item = track.timeline.find(i => i.game_no === game.game_no);
@@ -554,6 +574,10 @@
 
   function render() {
     renderPalette();
+    const tipSummary = data.tip_summary;
+    el('tip-summary').textContent = tipSummary?.window_available
+      ? `TIP games: ${tipSummary.tip_count} of the latest 10 · Observed no-tip run: ${tipSummary.no_tip_streak}.`
+      : 'TIP density needs 10 consecutive completed games with verified totals. Unknown settlements are not counted as no-tip games.';
     page = Math.min(page, Math.max(0, Math.ceil(data.games.length / pageSize) - 1));
     const start = page * pageSize, games = data.games.slice(start, start + pageSize);
     const scroller = el('grid'), scrollLeft = scroller.scrollLeft, scrollTop = scroller.scrollTop;
@@ -588,7 +612,9 @@
             const state = track.legend.find(s => s.letter === item.letter);
             const dot = button(item.letter === 'A' ? String(game.alerts.length) : item.letter, () => {selected = game.game_no; render();});
             dot.className = 'tl-dot'; dot.style.setProperty('--dot-color', state.color);
+            decorateTipCircle(dot, game);
             dot.title = `Game #${game.game_no} · Number ${game.number} · ${state.label}${game.alerts.length ? ` · ${game.alerts.length} saved alerts` : ''}`;
+            dot.title += ` · ${tipDescription(game)}`;
             dot.setAttribute('aria-label', `${track.display_name}: ${dot.title}`); td.append(dot);
           } else {td.textContent = '—'; td.title = 'Before this track’s reset. Waiting for new games.';}
           tr.append(td);

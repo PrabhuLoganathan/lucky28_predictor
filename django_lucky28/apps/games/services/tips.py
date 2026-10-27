@@ -28,7 +28,7 @@ def source_sequence(game_id):
 
 
 def source_round(game, raw=None):
-    raw = raw if raw is not None else game.winner_raw
+    raw = raw if raw is not None else getattr(game, 'winner_raw', None)
     raw = raw if isinstance(raw, dict) else {}
     # Only use totals captured together in the final packet, never pre-round
     # GameRound.bet_total_energy (which can survive when a winner omits bets).
@@ -44,6 +44,46 @@ def source_round(game, raw=None):
         if source in raw:
             round[target] = raw[source]
     return round
+
+
+def settlement_evidence(game):
+    """Freeze the source classification for rules, browser circles, and cards."""
+    row = source_round(game)
+    result = model.classify_round(row)
+    if getattr(game, 'game_type', None) not in ('lucky28', '', None):
+        result = dict(status='INVALID', reason='Tip accounting is only mapped for Lucky28.')
+    return dict(status=result['status'], amount=result.get('tipAmount'),
+                percent=result.get('tipPercent'), sequence=row['sequence'],
+                reason=result.get('reason', ''))
+
+
+def tip_facts(history, upcoming=None):
+    """Newest-first settlement facts; unknown totals and sequence gaps break runs."""
+    facts = []
+    previous = None
+    for game in history:
+        tip = settlement_evidence(game)
+        sequence = tip['sequence']
+        if previous is not None and (not model.integer(sequence) or previous != sequence + 1):
+            break
+        facts.append(tip['status'] if tip['status'] in ('TIP', 'NO_TIP') else None)
+        previous = sequence
+    if upcoming and history:
+        # Do not describe old results as the immediately preceding rounds when
+        # the new round's ID reveals a missing result at the head of history.
+        head, target = source_sequence(history[0].game_no), source_sequence(upcoming.game_no)
+        if head is not None and target is not None and target != head + 1:
+            return []
+    return facts
+
+
+def summarize_tip_facts(facts):
+    from itertools import takewhile
+    window = facts[:10]
+    ready = len(window) == 10 and None not in window
+    return dict(no_tip_streak=sum(1 for _ in takewhile(lambda value: value == 'NO_TIP', facts)),
+                window_size=10, window_available=ready,
+                tip_count=window.count('TIP') if ready else None)
 
 
 class TipMonitor:

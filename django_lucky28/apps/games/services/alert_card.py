@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from .timeline import TRACKS, classify
 
 WHITE, MUTED, BG, PANEL = '#f1f5ff', '#9baec9', '#0b1120', '#152139'
+TIP_GOLD = '#f5c542'
 STYLES = {
     'absence': ('ABSENCE', '#ffbd69', '⌛'),
     'streak': ('STREAK', '#b79aff', '🔥'),
@@ -118,6 +119,12 @@ def card_model(payload, kind):
         title = primary.get('title', 'Number Game patterns') if len(matches) <= 1 else f'{len(matches)} active conditions'
         count = primary.get('observed', '•') if len(matches) <= 1 else len(matches)
         metric = 'observed rounds' if len(matches) <= 1 else 'matched conditions'
+        if primary.get('group') == 'tip':
+            accent = TIP_GOLD
+            if len(matches) == 1 and primary.get('mode') == 'density_low':
+                metric = f'{", ".join(primary.get("values", ["TIP"]))} games / {primary.get("window", 10)}'
+            elif len(matches) == 1 and primary.get('mode') == 'absence' and primary.get('values') == ['TIP']:
+                metric = 'consecutive no-tip games'
     return dict(key=key, label=label, accent=accent, title=title, count=str(count), metric=metric,
                 identity=identity,
                 return_detail=(f'Returned: {payload["ended_number"]} · absence reset to 0'
@@ -195,7 +202,8 @@ def render_card(payload, kind='alert', budget=2.0):
         blocks.append((match, card_lines(title[:500], bold[24], 830)[:2], card_lines(detail[:1000], fonts[22], 830)[:2]))
     block_height = sum(28 + len(t)*30 + len(d)*28 for _,t,d in blocks)
     rows = math.ceil(len(games)/10)
-    timeline_height = 260 + rows*96 if games else 150
+    tip_evidence_saved = any('tip' in game for game in games)
+    timeline_height = 260 + rows*96 + (28 if tip_evidence_saved else 0) if games else 150
     sections = model['gap_sections']
     gap_height = 160 + sum(76 + len(section['rows'])*38 for section in sections) if sections else 0
     height = 440 + block_height + timeline_height + 90 + gap_height
@@ -328,6 +336,18 @@ def render_card(payload, kind='alert', budget=2.0):
                 draw.ellipse(bounds,outline=color,width=2)
             if i==0:
                 draw.ellipse((x-34,cy-34,x+34,cy+34),outline=WHITE,width=2)
+            if g.get('tip', {}).get('status') == 'TIP':
+                # Preserve group fill, gap dashes, and the separate newest ring.
+                if g.get('gap_before'):
+                    for angle in range(0,360,30):
+                        draw.arc(bounds,angle,angle+17,fill=TIP_GOLD,width=4)
+                else:
+                    draw.ellipse(bounds,outline=TIP_GOLD,width=4)
+                bx, by = x+25, cy-26
+                draw.ellipse((bx-11,by-11,bx+11,by+11),fill=TIP_GOLD,outline=BG,width=1)
+                points = [(bx+math.cos(-math.pi/2+k*math.pi/5)*(8 if k%2==0 else 3.5),
+                           by+math.sin(-math.pi/2+k*math.pi/5)*(8 if k%2==0 else 3.5)) for k in range(10)]
+                draw.polygon(points,fill=BG)
             text(x,cy,letter,bold[24],WHITE,'mm')
             state=g.get('new_repeat') or {}
             tag_kind=state.get('kind')
@@ -348,6 +368,8 @@ def render_card(payload, kind='alert', budget=2.0):
             draw.ellipse((x,ly+4,x+9,ly+13),fill=state['color'])
             text(x+16,ly,label,fonts[18],MUTED); x+=width
         text(54,y+timeline_height-87,'New / Repeated compares the number with its previous 10 rounds.',fonts[16],MUTED)
+        if tip_evidence_saved:
+            text(54,y+timeline_height-113,'Gold ring + star = TIP game (final bets minus final prizes > 0).',fonts[16],TIP_GOLD)
         text(54,y+timeline_height-61,'White ring = newest · Dashed circle = history gap · Not saved = legacy evidence',fonts[16],MUTED)
         latest=games[0].get('game_no','—')
         text(54,y+timeline_height-34,clipped(f'AS OF #{latest}   ·   Read left to right, then down',fonts[18],960),fonts[18],MUTED)

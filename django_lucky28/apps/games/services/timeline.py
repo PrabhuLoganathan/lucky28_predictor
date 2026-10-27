@@ -43,7 +43,8 @@ def recent_games(key):
     # Match the analysis page's event-time ordering, not lexicographic round IDs.
     return list(stream_games(key).filter(has_winner=True, winning_number__range=(0, 27),
         winner_event_ts__isnull=False).filter(Q(status__isnull=True) | Q(status__in=(3, 4)))
-        .only('game_no', 'winning_number', 'winner_event_ts').order_by('-winner_event_ts', '-pk')[:LIMIT + 9])
+        .only('game_no', 'winning_number', 'winner_event_ts', 'game_type', 'has_winner', 'status', 'winner_raw')
+        .order_by('-winner_event_ts', '-pk')[:LIMIT + 9])
 
 
 def watermark(game):
@@ -177,11 +178,16 @@ def build_timeline(key, enabled=None, cutoffs=None):
     evidence = recorded_alerts(key, visible) if 'alerts' in enabled else {}
     rows = []
     new_repeat = new_repeat_history(games)
+    from .tips import settlement_evidence, tip_facts, summarize_tip_facts
+    # Load final packets in one query rather than one deferred query per circle.
+    settlements = GameRound.objects.filter(pk__in=[game.pk for game in visible]).only(
+        'game_no', 'winning_number', 'has_winner', 'status', 'game_type', 'winner_raw').in_bulk()
     for index, game in enumerate(visible):
         rows.append(dict(game_no=game.game_no, number=game.winning_number,
             timestamp=game.winner_event_ts.isoformat(), url=reverse('game_detail', args=[game.game_no]),
             gap_before=index + 1 < len(games) and not adjacent(game, games[index + 1]),
-            alerts=evidence.get(game.game_no, []), new_repeat=new_repeat[index]))
+            alerts=evidence.get(game.game_no, []), new_repeat=new_repeat[index],
+            tip=settlement_evidence(settlements[game.pk])))
     tracks = []
     for track_key in enabled:
         title, legend = TRACKS[track_key]
@@ -195,6 +201,7 @@ def build_timeline(key, enabled=None, cutoffs=None):
             reset=bool(cutoff), active_events=patterns(items, legend) if track_key not in ('number', 'alerts') else []))
     return dict(limit=LIMIT, stream=key, latest_game_id=visible[0].game_no if visible else None,
         checked_at=timezone.now().isoformat(), games=rows, tracks=tracks,
+        tip_summary=summarize_tip_facts([] if latest_unavailable else tip_facts([settlements[g.pk] for g in visible])),
         has_gaps=any(row['gap_before'] for row in rows),
         number_stats=number_statistics(games), group_stats=group_statistics(games, not latest_unavailable),
         latest_completed_unavailable=latest_unavailable, observed_games=len(games))

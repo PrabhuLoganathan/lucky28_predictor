@@ -9,7 +9,7 @@ from .services.alert_settings import get_config
 
 VALUES = {'size': ['Big', 'Small'], 'parity': ['Odd', 'Even'],
           'color': ['Red', 'Yellow', 'Pink', 'Blue', 'Cyan', 'Green', 'Grey'],
-          'number': [str(n) for n in range(28)]}
+          'number': [str(n) for n in range(28)], 'tip': ['TIP', 'NO_TIP']}
 RANKS = [(n, f'Level {n}') for n in range(1, 6)]
 
 
@@ -44,7 +44,7 @@ class AlertRuleForm(StyledForm, forms.ModelForm):
         self.fields['values'].widget.attrs['size'] = min(7, max(2, len(choices)))
         self.fields['breaker_value'].choices = [('', 'Choose a value')] + choices
         self.fields['series'].initial = series
-        self.fields['series'].choices = [('size', 'Big / Small'), ('parity', 'Odd / Even'), ('color', 'Color'), ('number', 'Number')]
+        self.fields['series'].choices = [('size', 'Big / Small'), ('parity', 'Odd / Even'), ('color', 'Color'), ('number', 'Number'), ('tip', 'Tip settlement')]
         self.fields['mode'].choices = [('streak', 'Consecutive results'), ('absence', 'Drought / absence'),
             ('density', 'High frequency in a window'), ('density_low', 'Low frequency in a window'),
             ('breaker', 'Streak ended'), ('alternating', 'Alternating results'), ('every_game', 'Every new round')]

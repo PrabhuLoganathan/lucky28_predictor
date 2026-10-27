@@ -10,6 +10,9 @@ rankings, result explanations, hits/misses and an exportable evidence log at
 The [Tip game model](TIP_MODEL.md) at `/tips/` classifies final bets minus final
 prizes, tracks no-tip milestones at 7, 10, and 15 rounds, and persists a retryable
 alert queue. Live logger ingestion updates it; external delivery is opt-in.
+The regular alert system also includes no-TIP absence at 3 games and TIP density
+at most 3 in 10. Confirmed TIP results have gold borders and ★ markers in browser
+timelines and newly captured Telegram alert cards.
 
 Run the dashboard and logger together from this project:
 

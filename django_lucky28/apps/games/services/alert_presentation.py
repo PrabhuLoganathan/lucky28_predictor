@@ -47,8 +47,17 @@ def snapshot_timeline_lines(payload, kind):
     if not games:
         return []
     focus = focus_track(payload, kind, dict(games=games[:15]))
-    sequence = ' · '.join(focus['letters'])
-    return [f'🧭 {focus["title"]} snapshot (newest {min(len(games), 15)}): {sequence}']
+    sequence = ' · '.join(letter + ('★' if game.get('tip', {}).get('status') == 'TIP' else '')
+                          for letter, game in zip(focus['letters'], games[:15]))
+    lines = [f'🧭 {focus["title"]} snapshot (newest {min(len(games), 15)}): {sequence}']
+    if any('tip' in game for game in games):
+        lines.append('★ Gold border/star = TIP game; unmarked results may have no tip or unknown totals.')
+        summary = snapshot.get('tip_summary', {})
+        if summary.get('window_available'):
+            lines.append(f'TIP density: {summary["tip_count"]}/10 completed games · Observed no-tip run: {summary["no_tip_streak"]}.')
+        else:
+            lines.append('TIP density: unavailable — 10 consecutive verified settlements required.')
+    return lines
 
 
 def format_message(payload, kind='alert', limit=4096):

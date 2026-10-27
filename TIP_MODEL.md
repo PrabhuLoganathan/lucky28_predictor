@@ -5,6 +5,44 @@ in the existing Django application. Open **`/tips/`** for the live settlement
 table, no-tip counter, gap/conflict diagnostics, and persisted alert queue.
 `GET /api/tips/` exposes the same data. Both routes are read-only.
 
+## TIP conditions in the regular Telegram alerts
+
+Two rules are installed in **Alerts → Rules**, using the same enabled destinations,
+subscription levels, Telegram settings, and delivery worker as existing alerts:
+
+| Rule | Condition |
+| --- | --- |
+| TIP absent for 3 consecutive games | At least 3 consecutive completed settlements have no tip. |
+| TIP low density — at most 3 in 10 | The latest 10 consecutive verified settlements contain 0, 1, 2, or 3 TIP games. |
+
+These rules are evaluated when the next round opens, using only preceding completed
+results. Each sends on activation, stays silent while the condition remains active,
+and rearms after it clears. Unknown totals, missing rounds, and date boundaries
+cannot be counted as no-tip games or skipped to build a ten-game window. Both rules
+can activate together. Thresholds and enable/disable controls are editable in the
+existing rule form under **Tip settlement**.
+
+`run.py` installs these two rules idempotently through `sync_tip_alerts`, preserving
+customized saved rules. For an existing running installation:
+
+```sh
+.venv/bin/python django_lucky28/manage.py migrate
+.venv/bin/python django_lucky28/manage.py sync_tip_alerts
+```
+
+Restart the application and its alert worker after updating the code. No separate
+tip worker is needed for these two regular alerts. The older standalone monitor
+still keeps its independent 7/10/15 milestone event queue; its optional worker is a
+separate delivery path.
+
+Confirmed TIP results have a **gold border and superscript star (★)** in every
+browser timeline view and in newly captured Telegram timeline images. The fill
+still identifies the number/category, and the newest-result ring stays visible.
+Captions also mark TIP results with ★ and show verified ten-game density when
+available. Unmarked circles may be NO_TIP or unknown; their accessible labels and
+details distinguish the two. Old frozen alerts without settlement evidence stay
+unchanged rather than guessing historical tip status.
+
 ## Rules
 
 - `tipAmount = totalBets - totalPrizes`, using exact integers.
