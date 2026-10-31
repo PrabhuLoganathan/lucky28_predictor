@@ -21,8 +21,12 @@ def locked_runtime():
     return AlertRuntime.objects.select_for_update().get(pk=1)
 
 
-def eligible_destinations(now):
-    return AlertDestination.objects.filter(enabled=True).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+def eligible_destinations(now, destination_ids=(), send_to_levels=True, minimum=1):
+    destinations = AlertDestination.objects.filter(enabled=True).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    selected = Q(pk__in=destination_ids)
+    if send_to_levels:
+        selected |= Q(routing_type='level', plan_rank__gte=minimum)
+    return destinations.filter(selected)
 
 
 def game_facts(history, upcoming=None):
@@ -103,7 +107,7 @@ def record_live_event(game, phase):
     previous = AlertEvaluation.objects.order_by('-observed_at', '-pk').first()
     prior = previous.active_keys if previous else []
     matches = []
-    for rule in AlertRule.objects.filter(enabled=True).order_by('key'):
+    for rule in AlertRule.objects.filter(enabled=True).prefetch_related('destinations').order_by('key'):
         active = prior if not rule.session_only or (previous and previous.session_started_at == session_start) else []
         matches.extend(evaluate_rules([rule], session_facts if rule.session_only else facts, active))
     from .card_timeline import snapshot_from_games
@@ -122,9 +126,12 @@ def record_live_event(game, phase):
     AlertOccurrence.objects.bulk_create([AlertOccurrence(evaluation=evaluation, identity=m['identity'],
         rule_key=m['rule_key'], is_activation=m['is_activation'], snapshot=m) for m in matches])
     if config.telegram_enabled:
-        for destination in eligible_destinations(now):
-            routed = [m for m in matches if m['is_activation'] and m['min_plan_rank'] <= destination.plan_rank]
-            for match in routed:
+        for match in matches:
+            if not match['is_activation']:
+                continue
+            destinations = eligible_destinations(now, match['destination_ids'],
+                match['send_to_levels'], match['min_plan_rank'])
+            for destination in destinations:
                 queue_delivery(f'alert:{evaluation.pk}:{destination.pk}:{match["identity"]}', destination, 'alert',
                                dict(evidence, matches=[match]), evaluation)
     return evaluation

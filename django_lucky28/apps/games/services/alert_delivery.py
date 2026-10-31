@@ -12,6 +12,8 @@ from django.utils import timezone
 from games.models import AlertDelivery, AlertRuntime, GameRound
 from .alert_presentation import format_message, render_card
 from .alert_settings import get_config
+from .alert_routing import routing_allowed
+from .alert_album import ALBUM_KINDS, render_album, format_album_caption
 
 _render_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='alert-card')
 _render_future = None
@@ -22,7 +24,7 @@ def card_with_deadline(payload, kind):
     # A timed-out render must not create an unbounded work queue.
     if _render_future is not None and not _render_future.done():
         return None
-    _render_future = _render_pool.submit(render_card, payload, kind)
+    _render_future = _render_pool.submit(render_album if kind in ALBUM_KINDS else render_card, payload, kind)
     try:
         return _render_future.result(timeout=2.0)
     except Exception:
@@ -54,9 +56,8 @@ def deliver_one(delivery_id):
     if not destination.enabled or (destination.expires_at and destination.expires_at <= now) or destination.chat_id != delivery.payload['chat_id']:
         finish('cancelled', error='Destination disabled, changed or expired.')
         return True
-    matches = delivery.payload.get('matches', [])
-    if any(m['min_plan_rank'] > destination.plan_rank for m in matches):
-        finish('cancelled', error='Subscription rank no longer permits this payload.')
+    if delivery.kind != 'result' and not routing_allowed(delivery):
+        finish('cancelled', error='Destination routing or level no longer permits this payload.')
         return True
     if delivery.kind == 'window':
         from .window_alerts import delivery_gate as window_delivery_gate
@@ -101,12 +102,15 @@ def deliver_one(delivery_id):
         if not destination.send_results:
             finish('cancelled', error='Result follow-ups disabled.')
             return True
-        original = AlertDelivery.objects.filter(evaluation=delivery.evaluation, destination=destination, kind='alert').first()
-        if not original or original.status in ('failed', 'uncertain', 'cancelled'):
+        originals = AlertDelivery.objects.filter(evaluation=delivery.evaluation, destination=destination, kind='alert')
+        if not originals.filter(status__in=['sent', 'pending', 'sending']).exists():
             finish('cancelled', error='Original alert was not confirmed sent.')
             return True
-        if original.status != 'sent':
+        if not originals.filter(status='sent').exists():
             finish('pending', available_at=now + timedelta(seconds=2))
+            return True
+        if not routing_allowed(delivery):
+            finish('cancelled', error='Original alert routing no longer permits this result.')
             return True
     if delivery.kind == 'health' and not destination.send_health:
         finish('cancelled', error='Health warnings disabled.')
@@ -115,10 +119,25 @@ def deliver_one(delivery_id):
             pk=1, outage_active=True, outage_number=delivery.payload.get('outage_number')).exists():
         finish('cancelled', error='Collection resumed or this outage was superseded.')
         return True
-    card = card_with_deadline(delivery.payload, delivery.kind) if delivery.payload.get('use_cards') and delivery.kind != 'test' else None
-    text = format_message(delivery.payload, delivery.kind, limit=1024 if card else 4096)
-    method = 'sendPhoto' if card else 'sendMessage'
-    data = {'chat_id': delivery.payload['chat_id'], 'parse_mode': 'HTML', 'caption' if card else 'text': text}
+    rendered = card_with_deadline(delivery.payload, delivery.kind) if delivery.payload.get('use_cards') and delivery.kind != 'test' else None
+    cards = rendered if isinstance(rendered, list) else [rendered] if rendered else []
+    if isinstance(rendered, list) and (len(cards) != 3 or not all(isinstance(card, bytes) for card in cards)):
+        cards = []  # Never send a partial evidence album.
+    album = len(cards) == 3
+    text = (format_album_caption(delivery.payload, delivery.kind) if album else
+            format_message(delivery.payload, delivery.kind, limit=1024 if cards else 4096))
+    files = None
+    if album:
+        method = 'sendMediaGroup'
+        media = [dict(type='photo', media=f'attach://photo{index}') for index in range(1, 4)]
+        media[0].update(caption=text, parse_mode='HTML')
+        data = dict(chat_id=delivery.payload['chat_id'], media=json.dumps(media, ensure_ascii=False))
+        files = {f'photo{index}': (f'alert-{index}.jpg', card, 'image/jpeg') for index, card in enumerate(cards, 1)}
+    else:
+        method = 'sendPhoto' if cards else 'sendMessage'
+        data = {'chat_id': delivery.payload['chat_id'], 'parse_mode': 'HTML', 'caption' if cards else 'text': text}
+        if cards:
+            files = {'photo': ('alert.jpg', cards[0], 'image/jpeg')}
     if delivery.kind == 'alert' and not GameRound.objects.filter(pk=delivery.evaluation.game_id, has_winner=False).exists():
         finish('cancelled', error='Round completed during payload preparation.')
         return True
@@ -127,9 +146,10 @@ def deliver_one(delivery_id):
         directory = Path(settings.ALERT_STATE_DIR) / 'artifacts'
         directory.mkdir(parents=True, exist_ok=True)
         artifact = directory / f'{delivery.pk}.json'
-        artifact.write_text(json.dumps({'method': method, 'data': data}, ensure_ascii=False), encoding='utf-8')
-        if card:
-            (directory / f'{delivery.pk}.jpg').write_bytes(card)
+        artifact.write_text(json.dumps({'method': method, 'data': data, 'image_count': len(cards)}, ensure_ascii=False), encoding='utf-8')
+        for index, card in enumerate(cards, 1):
+            suffix = '' if index == 1 else f'-{index}'
+            (directory / f'{delivery.pk}{suffix}.jpg').write_bytes(card)
         AlertDelivery.objects.filter(pk=delivery.pk).update(artifact_path=str(artifact))
     except OSError:
         finish('pending' if delivery.kind in ('group', 'group_end', 'window', 'category', 'category_end') else 'failed',
@@ -160,10 +180,15 @@ def deliver_one(delivery_id):
                      else 'Category eligibility changed before dispatch.')
             finish(gate, available_at=now + timedelta(seconds=30), error=error)
             return True
+    destination.refresh_from_db()
+    if (not destination.enabled or (destination.expires_at and destination.expires_at <= timezone.now())
+            or destination.chat_id != delivery.payload['chat_id'] or not routing_allowed(delivery)):
+        finish('cancelled', error='Destination or routing changed before dispatch.')
+        return True
     try:
         response = requests.post(
             f'https://api.telegram.org/bot{config.bot_token}/{method}',
-            data=data, files={'photo': ('alert.jpg', card, 'image/jpeg')} if card else None,
+            data=data, files=files,
             timeout=(5, 10), allow_redirects=False,
         )
         try:
@@ -173,9 +198,15 @@ def deliver_one(delivery_id):
         if not isinstance(body, dict):
             body = {}
         result = body.get('result')
-        message_id = result.get('message_id') if isinstance(result, dict) else None
-        if 200 <= response.status_code < 300 and body.get('ok') is True and type(message_id) is int:
-            finish('sent', sent_at=timezone.now(), message_id=message_id, error='')
+        messages = result if album and isinstance(result, list) else [result] if not album and isinstance(result, dict) else []
+        ids = [message.get('message_id') for message in messages if isinstance(message, dict)]
+        groups = [message.get('media_group_id') for message in messages if isinstance(message, dict)]
+        confirmed = (len(messages) == len(ids) == (3 if album else 1) and all(type(value) is int for value in ids)
+                     and len(set(ids)) == len(ids)
+                     and (not album or (all(isinstance(group, str) and group for group in groups) and len(set(groups)) == 1)))
+        if 200 <= response.status_code < 300 and body.get('ok') is True and confirmed:
+            finish('sent', sent_at=timezone.now(), message_id=ids[0], message_ids=ids,
+                   media_group_id=groups[0] if album else '', error='')
         elif response.status_code == 429 and body.get('ok') is False:
             try:
                 retry_after = min(86400, max(1, int(body.get('parameters', {}).get('retry_after', 30))))

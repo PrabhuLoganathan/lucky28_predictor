@@ -374,7 +374,7 @@ class PresentationTests(SimpleTestCase):
         card = render_card(self.payload())
         self.assertLess(len(card), 400_000)
         self.assertEqual(Image.open(BytesIO(card)).width, 1080)
-        with patch('games.services.alert_delivery.render_card', side_effect=RuntimeError('render failed')):
+        with patch('games.services.alert_delivery.render_album', side_effect=RuntimeError('render failed')):
             self.assertIsNone(card_with_deadline(self.payload(), 'alert'))
 
     def test_card_timeout_does_not_queue_more_work(self):

@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
@@ -244,13 +245,13 @@ class CategoryAlertTests(TestCase):
         self.assertEqual(delivery.status, 'pending')
         self.result(104, 16)
         AlertDelivery.objects.filter(pk=delivery.pk).update(available_at=timezone.now())
-        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': {'message_id': 42}}))
+        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': [{'message_id': i, 'media_group_id': 'album-test'} for i in (42, 43, 44)]}))
         deliver_one(delivery.pk)
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, 'sent')
         self.assertEqual(delivery.dedup_key, key)
-        self.assertIn('4 consecutive completed rounds', post.call_args.kwargs['data']['caption'])
-        self.assertTrue(post.call_args.args[0].endswith('/sendPhoto'))
+        self.assertIn('4 completed rounds', json.loads(post.call_args.kwargs['data']['media'])[0]['caption'])
+        self.assertTrue(post.call_args.args[0].endswith('/sendMediaGroup'))
         self.assertFalse(deliver_one(delivery.pk))
 
     @patch('games.services.alert_delivery.requests.post')
@@ -439,14 +440,14 @@ class CategoryAlertTests(TestCase):
         ending.refresh_from_db()
         self.assertEqual(ending.status, 'pending')
         AlertDelivery.objects.filter(pk=ending.pk).update(available_at=timezone.now())
-        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok':True, 'result':{'message_id':42}}))
+        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok':True, 'result':[{'message_id': i, 'media_group_id': 'album-test'} for i in (42, 43, 44)]}))
         deliver_one(ending.pk)
         ending.refresh_from_db()
         self.assertEqual(ending.status, 'sent')
         self.assertEqual(ending.dedup_key, key)
-        caption = post.call_args.kwargs['data']['caption']
+        caption = json.loads(post.call_args.kwargs['data']['media'])[0]['caption']
         self.assertIn('ROW STREAK ENDED', caption)
-        self.assertIn('[14, 15, 16, 17, 18, 19, 20]', caption)
+        self.assertIn('Numbers: 14, 15, 16, 17, 18, 19, 20', caption)
         self.assertIn('after 3 consecutive hits', caption)
         self.assertIn('Result 21 is outside this group', caption)
         self.assertLess(len(caption), 1024)

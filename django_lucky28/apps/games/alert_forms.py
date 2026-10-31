@@ -2,6 +2,7 @@ import re
 from uuid import uuid4
 
 from django import forms
+from django.db import transaction
 from django.utils.text import slugify
 
 from .models import AlertRule, AlertDestination, AlertSettings
@@ -10,14 +11,31 @@ from .services.alert_settings import get_config
 VALUES = {'size': ['Big', 'Small'], 'parity': ['Odd', 'Even'],
           'color': ['Red', 'Yellow', 'Pink', 'Blue', 'Cyan', 'Green', 'Grey'],
           'number': [str(n) for n in range(28)], 'tip': ['TIP', 'NO_TIP']}
-RANKS = [(n, f'Level {n}') for n in range(1, 6)]
+RANKS = [(n, f'Level {n}' + (' (low)' if n == 1 else ' (high)' if n == 5 else '')) for n in range(1, 6)]
+
+
+def recipient_choices():
+    return [('levels', 'Level hierarchy')] + [(str(d.pk), d.name) for d in AlertDestination.objects.order_by('name')]
+
+
+def initial_recipients(instance):
+    return (['levels'] if instance.send_to_levels else []) + (
+        [str(d.pk) for d in instance.destinations.all()] if instance.pk else [])
+
+
+class RecipientField(forms.MultipleChoiceField):
+    widget = forms.CheckboxSelectMultiple
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.widget.attrs['class'] = 'form-check-input'
 
 
 class StyledForm:
     def style(self):
         for field in self.fields.values():
             widget = field.widget
-            widget.attrs['class'] = ('form-check-input' if isinstance(widget, forms.CheckboxInput) else
+            widget.attrs['class'] = ('form-check-input' if isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)) else
                                      'form-select' if isinstance(widget, forms.Select) else 'form-control')
 
 
@@ -25,11 +43,13 @@ class AlertRuleForm(StyledForm, forms.ModelForm):
     values = forms.MultipleChoiceField(label='Matching values', required=False,
                                       help_text='Choose one value, or two for an alternating pattern. Hold Ctrl / Command to select multiple values.')
     breaker_value = forms.ChoiceField(label='Value that ends the streak', required=False)
-    min_plan_rank = forms.TypedChoiceField(label='Minimum destination level', choices=RANKS, coerce=int)
+    min_plan_rank = forms.TypedChoiceField(label='Minimum destination level', choices=RANKS, coerce=int, required=False)
+    recipients = RecipientField(label='Send to',
+        help_text='Tick channels, Level hierarchy, or both. Selected channels ignore levels. Each channel receives the alert once.')
 
     class Meta:
         model = AlertRule
-        fields = ['title', 'series', 'mode', 'values', 'threshold', 'window', 'breaker_value', 'min_plan_rank', 'session_only', 'enabled']
+        fields = ['title', 'series', 'mode', 'values', 'threshold', 'window', 'breaker_value', 'recipients', 'min_plan_rank', 'session_only', 'enabled']
         labels = {'title': 'Rule name', 'series': 'Watch', 'mode': 'Pattern', 'threshold': 'Trigger count',
                   'window': 'Look back over this many rounds', 'session_only': 'Use only this server session', 'enabled': 'Rule enabled'}
         help_texts = {'threshold': 'Minimum count for most patterns; maximum count for low density.',
@@ -38,6 +58,8 @@ class AlertRuleForm(StyledForm, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['recipients'].choices = recipient_choices()
+        self.initial['recipients'] = initial_recipients(self.instance)
         series = self.data.get('series') if self.is_bound else self.instance.series or 'size'
         choices = [(v, v) for v in VALUES.get(series, [])]
         self.fields['values'].choices = choices
@@ -54,6 +76,10 @@ class AlertRuleForm(StyledForm, forms.ModelForm):
 
     def clean(self):
         data = super().clean()
+        if not data.get('min_plan_rank'):
+            if 'levels' in data.get('recipients', []):
+                self.add_error('min_plan_rank', 'Choose a minimum destination level.')
+            data['min_plan_rank'] = self.instance.min_plan_rank or 1
         mode = data.get('mode')
         if mode != 'breaker':
             data['breaker_value'] = ''
@@ -69,13 +95,24 @@ class AlertRuleForm(StyledForm, forms.ModelForm):
             self.instance.key = f'{slugify(data.get("title", "rule"))[:60] or "rule"}-{uuid4().hex[:10]}'
         return data
 
+    @transaction.atomic
+    def save(self, commit=True):
+        self.instance.send_to_levels = 'levels' in self.cleaned_data['recipients']
+        return super().save(commit=commit)
+
+    def _save_m2m(self):
+        super()._save_m2m()
+        self.instance.destinations.set([int(value) for value in self.cleaned_data['recipients'] if value != 'levels'])
+
 
 class AlertDestinationForm(StyledForm, forms.ModelForm):
-    plan_rank = forms.TypedChoiceField(label='Destination level', choices=RANKS, coerce=int)
+    plan_rank = forms.TypedChoiceField(label='Destination level', choices=RANKS, coerce=int, required=False)
+    routing_type = forms.ChoiceField(label='Destination type', choices=AlertDestination.ROUTING_TYPES,
+        required=False, help_text='Direct only receives alerts explicitly assigned to this channel, outside Levels 1–5.')
 
     class Meta:
         model = AlertDestination
-        fields = ['name', 'chat_id', 'plan_rank', 'expires_at', 'enabled', 'send_results', 'send_health', 'use_cards']
+        fields = ['name', 'chat_id', 'routing_type', 'plan_rank', 'expires_at', 'enabled', 'send_results', 'send_health', 'use_cards']
         labels = {'name': 'Destination name', 'chat_id': 'Telegram chat ID or channel username',
                   'expires_at': 'Subscription expires (UTC)', 'enabled': 'Enable this destination',
                   'send_results': 'Send confirmed result follow-ups', 'send_health': 'Send collection outage warnings',
@@ -93,6 +130,18 @@ class AlertDestinationForm(StyledForm, forms.ModelForm):
         if not re.fullmatch(r'-?\d+|@[A-Za-z][A-Za-z0-9_]{4,}', value):
             raise forms.ValidationError('Enter a numeric chat ID or a channel username beginning with @.')
         return value
+
+    def clean(self):
+        data = super().clean()
+        data['routing_type'] = data.get('routing_type') or 'level'
+        if not data.get('plan_rank'):
+            if data['routing_type'] == 'level':
+                self.add_error('plan_rank', 'Choose a destination level.')
+            # Preserve the dormant level so switching back does not lose it.
+            data['plan_rank'] = self.instance.plan_rank or 1
+        if data['routing_type'] == 'direct':
+            data['send_health'] = False
+        return data
 
 
 class AlertSettingsForm(StyledForm, forms.ModelForm):

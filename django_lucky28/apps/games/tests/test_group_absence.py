@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone as dt_timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -151,7 +152,7 @@ class GroupAbsenceTests(TestCase):
             self.assertEqual(self.state().threshold, 20)
             self.assertTrue(GroupAbsenceStream.objects.get().enabled)
         self.assertEqual(GroupAbsenceChange.objects.count(), before)
-        response = self.client.post('/alerts/groups/settings/', {'enabled': 'on', 'G01_enabled': 'on', 'G01_threshold': '1.0'},
+        response = self.client.post('/alerts/groups/settings/', {'enabled': 'on', 'G01_recipients': ['levels'], 'G01_enabled': 'on', 'G01_threshold': '1.0'},
                                     REMOTE_ADDR='127.0.0.1', HTTP_HOST='localhost')
         self.assertContains(response, 'Enter a whole number of rounds greater than 0.', status_code=400)
         self.assertEqual(self.state().threshold, 20)
@@ -263,7 +264,7 @@ class GroupAbsenceTests(TestCase):
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, 'pending')
         AlertDelivery.objects.filter(pk=delivery.pk).update(available_at=timezone.now())
-        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': {'message_id': 42}}))
+        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': [{'message_id': i, 'media_group_id': 'album-test'} for i in (42, 43, 44)]}))
         self.assertTrue(deliver_one(delivery.pk))
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, 'sent')
@@ -311,7 +312,7 @@ class GroupAbsenceTests(TestCase):
         self.assertContains(response, 'Magenta')
         response = self.client.get('/alerts/groups/settings/', **local)
         self.assertContains(response, 'Cancel')
-        response = self.client.post('/alerts/groups/settings/', {'enabled': 'on', 'G01_enabled': 'on', 'G01_threshold': ' 1 '}, follow=True, **local)
+        response = self.client.post('/alerts/groups/settings/', {'enabled': 'on', 'G01_recipients': ['levels'], 'G01_enabled': 'on', 'G01_threshold': ' 1 '}, follow=True, **local)
         self.assertContains(response, 'saved and applied immediately')
         self.assertEqual(GroupAbsenceEvent.objects.count(), 1)
         self.assertEqual(GroupAbsenceChange.objects.last().editor, 'Local operator')
@@ -355,11 +356,11 @@ class GroupAbsenceTests(TestCase):
         key = delivery.dedup_key
         self.result(1, 1)
         self.assertEqual(GroupAbsenceEvent.objects.count(), 1)
-        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': {'message_id': 42}}))
+        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': [{'message_id': i, 'media_group_id': 'album-test'} for i in (42, 43, 44)]}))
         deliver_one(delivery.pk)
         delivery.refresh_from_db()
         self.assertEqual(delivery.dedup_key, key)
         self.assertEqual(delivery.payload['last_round'], 'R1')
         self.assertEqual(delivery.payload['absence'], 3)
-        self.assertTrue(post.call_args.args[0].endswith('/sendPhoto'))
-        self.assertIn('Last appearance: 1 in round R1', post.call_args.kwargs['data']['caption'])
+        self.assertTrue(post.call_args.args[0].endswith('/sendMediaGroup'))
+        self.assertIn('Absent for: 3 completed rounds', json.loads(post.call_args.kwargs['data']['media'])[0]['caption'])

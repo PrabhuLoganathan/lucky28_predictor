@@ -114,7 +114,7 @@ def queue_endings(config):
         # each cycle, so that race cannot lose the follow-up.
         for original in originals:
             destination = original.destination
-            if (not destination.enabled or destination.plan_rank < 1
+            if (not destination.enabled or destination.routing_type != 'level' or destination.plan_rank < 1
                     or (destination.expires_at and destination.expires_at <= now)
                     or str(original.original_chat_id) != destination.chat_id):
                 continue

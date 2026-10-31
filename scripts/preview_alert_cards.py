@@ -13,6 +13,7 @@ django.setup()
 
 from games.services.card_timeline import snapshot_from_games
 from games.services.alert_presentation import render_card
+from games.services.alert_album import render_album
 
 
 def snapshot(numbers):
@@ -69,6 +70,10 @@ def main():
         path = directory / f'{name}.jpg'
         path.write_bytes(content)
         print(f'{path} ({len(content):,} bytes)')
+        for index, page in enumerate(render_album(payload, kind), 1):
+            album_path = directory / f'{name}-album-{index}.jpg'
+            album_path.write_bytes(page)
+            print(f'{album_path} ({len(page):,} bytes)')
 
 
 if __name__ == '__main__':

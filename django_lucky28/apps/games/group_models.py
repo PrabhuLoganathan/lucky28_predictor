@@ -20,6 +20,9 @@ class GroupAbsenceStream(models.Model):
 
 class GroupAbsenceState(models.Model):
     stream = models.ForeignKey(GroupAbsenceStream, on_delete=models.CASCADE, related_name='groups')
+    send_to_levels = models.BooleanField(default=True)
+    destinations = models.ManyToManyField('AlertDestination', blank=True,
+        through='GroupAbsenceDestination', related_name='selected_groups')
     group_id = models.CharField(max_length=3)
     enabled = models.BooleanField(default=False)
     threshold = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(MAX_GROUP_THRESHOLD)])
@@ -42,6 +45,14 @@ class GroupAbsenceState(models.Model):
             models.CheckConstraint(condition=models.Q(ending_threshold__isnull=True) | models.Q(ending_threshold__gte=1, ending_threshold__lte=MAX_GROUP_THRESHOLD), name='valid_group_ending_threshold'),
             models.CheckConstraint(condition=models.Q(ending_enabled=False) | models.Q(ending_threshold__isnull=False), name='enabled_group_ending_threshold'),
         ]
+
+
+class GroupAbsenceDestination(models.Model):
+    state = models.ForeignKey(GroupAbsenceState, on_delete=models.CASCADE)
+    destination = models.ForeignKey('AlertDestination', on_delete=models.PROTECT)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['state', 'destination'], name='unique_group_destination')]
 
 
 class GroupAbsenceChange(models.Model):

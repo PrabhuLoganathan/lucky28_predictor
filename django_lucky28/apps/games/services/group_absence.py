@@ -185,7 +185,8 @@ def evaluate(stream, states):
     for event in GroupAbsenceEvent.objects.filter(stream=stream, resolved_at__isnull=True):
         if not eligible(stream, state_map[event.group_id]):
             continue
-        for destination in eligible_destinations(now):
+        state = state_map[event.group_id]
+        for destination in eligible_destinations(now, [d.pk for d in state.destinations.all()], state.send_to_levels):
             queue_delivery(f'group:{event.pk}:{destination.pk}', destination, 'group',
                            dict(event.snapshot, event_id=event.pk))
 
@@ -193,7 +194,7 @@ def evaluate(stream, states):
 @transaction.atomic
 def synchronize(key='lucky28', evaluate_current=True, force=False):
     stream = locked_stream(key)
-    states = list(stream.groups.order_by('group_id'))
+    states = list(stream.groups.prefetch_related('destinations').order_by('group_id'))
     if stream.dirty or force:
         rebuild(stream, states)
     if evaluate_current:
@@ -215,6 +216,7 @@ def save_settings(key, enabled, values, editor):
         raise ValueError('Settings must contain all seven groups.')
     validated = {group: dict(enabled=bool(value['enabled']),
                             threshold=parse_threshold(value['threshold'], value['enabled']),
+                            **({field: value[field] for field in ('send_to_levels', 'destination_ids') if field in value}),
                             **(dict(ending_enabled=bool(value['ending_enabled']),
                                     ending_threshold=parse_threshold(value.get('ending_threshold'), value['ending_enabled']))
                                if 'ending_enabled' in value else {}))
@@ -228,16 +230,20 @@ def save_settings(key, enabled, values, editor):
             old_value={'enabled': stream.enabled}, new_value={'enabled': bool(enabled)}, editor=editor)
         stream.enabled = bool(enabled)
         stream.save(update_fields=['enabled'])
-    for state in stream.groups.all():
+    for state in stream.groups.prefetch_related('destinations'):
         old = dict(enabled=state.enabled, threshold=state.threshold,
-                   ending_enabled=state.ending_enabled, ending_threshold=state.ending_threshold)
+                   ending_enabled=state.ending_enabled, ending_threshold=state.ending_threshold,
+                   send_to_levels=state.send_to_levels,
+                   destination_ids=sorted(d.pk for d in state.destinations.all()))
         new = dict(old, **validated[state.group_id])
         if old != new:
             GroupAbsenceChange.objects.create(stream=stream, group_id=state.group_id,
                                               old_value=old, new_value=new, editor=editor)
             state.enabled, state.threshold = new['enabled'], new['threshold']
             state.ending_enabled, state.ending_threshold = new['ending_enabled'], new['ending_threshold']
-            state.save(update_fields=['enabled', 'threshold', 'ending_enabled', 'ending_threshold'])
+            state.send_to_levels = new['send_to_levels']
+            state.save(update_fields=['enabled', 'threshold', 'ending_enabled', 'ending_threshold', 'send_to_levels'])
+            state.destinations.set(new['destination_ids'])
     return synchronize(key)
 
 

@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -159,7 +160,8 @@ class GroupEndingTests(TestCase):
         page = self.client.get('/alerts/groups/settings/', **self.local)
         self.assertContains(page, 'Minimum missed rounds before return')
         self.assertContains(page, 'G01_ending_threshold')
-        post = {'enabled': 'on', 'G01_ending_enabled': 'on', 'G01_ending_threshold': '7'}
+        post = {'enabled': 'on', 'G01_recipients': ['levels'], 'G01_ending_enabled': 'on', 'G01_ending_threshold': '7'}
+        post.update({f'{group.id}_recipients': ['levels'] for group in COLOR_GROUPS})
         self.assertEqual(self.client.post('/alerts/groups/settings/', post, **self.local).status_code, 302)
         self.assertEqual(GroupAbsenceState.objects.get(group_id='G01').ending_threshold, 7)
         self.assertEqual(GroupAbsenceChange.objects.last().new_value['ending_threshold'], 7)
@@ -209,12 +211,12 @@ class GroupEndingTests(TestCase):
             self.result(i, n)
         delivery = AlertDelivery.objects.get()
         post.return_value = Mock(status_code=200,
-            json=Mock(return_value={'ok': True, 'result': {'message_id': 123}}))
+            json=Mock(return_value={'ok': True, 'result': [{'message_id': i, 'media_group_id': 'album-test'} for i in (123, 124, 125)]}))
         with TemporaryDirectory() as directory, override_settings(ALERT_STATE_DIR=Path(directory)):
             self.assertTrue(deliver_one(delivery.pk))
             self.assertFalse(deliver_one(delivery.pk))
         self.assertEqual(post.call_count, 1)
         data = post.call_args.kwargs['data']
-        self.assertIn('COLOR ABSENCE ENDED', data.get('text', data.get('caption', '')))
+        self.assertIn('RED GROUP — ABSENCE ENDED', json.loads(data['media'])[0]['caption'])
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, 'sent')

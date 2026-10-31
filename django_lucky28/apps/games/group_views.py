@@ -8,7 +8,7 @@ from django.utils import timezone
 from .alert_management import management_access, paginated
 from .group_config import GROUP_BY_ID, MAX_GROUP_THRESHOLD
 from .group_forms import GroupAbsenceSettingsForm
-from .models import GroupAbsenceStream, GroupAbsenceChange, GroupAbsenceEvent, GroupAbsenceEnding
+from .models import GroupAbsenceStream, GroupAbsenceChange, GroupAbsenceEvent, GroupAbsenceEnding, AlertDestination
 from .services.group_absence import synchronize, save_settings, alert_state
 from .services.alert_presentation import format_group_message, format_message
 
@@ -45,7 +45,16 @@ def configuration(request):
         save_settings(key, form.cleaned_data['enabled'], form.group_values(), editor)
         messages.success(request, 'Group absence settings saved and applied immediately.')
         return redirect(f'{request.path}?{urlencode({"stream": key})}')
+    changes = list(GroupAbsenceChange.objects.filter(stream=stream).order_by('-pk')[:50])
+    destination_names = dict(AlertDestination.objects.values_list('pk', 'name'))
+    for change in changes:
+        for value in (change.old_value, change.new_value):
+            legacy_target = value.get('direct_destination_id')
+            ids = value.get('destination_ids', [legacy_target] if legacy_target else [])
+            labels = ['Level hierarchy'] if value.get('send_to_levels', legacy_target is None) else []
+            labels.extend(destination_names.get(pk, 'Removed channel') for pk in ids)
+            value['routing_summary'] = ' + '.join(labels) or 'No recipients'
     return render(request, 'games/alerts/group_settings.html', dict(alert_tab='groups', form=form,
         group_rows=form.group_rows(), stream=stream, maximum=MAX_GROUP_THRESHOLD,
-        changes=GroupAbsenceChange.objects.filter(stream=stream).order_by('-pk')[:50],
+        changes=changes,
         display_timezone=timezone.get_current_timezone_name()), status=400 if request.method == 'POST' else 200)

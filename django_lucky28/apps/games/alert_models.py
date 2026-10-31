@@ -2,6 +2,8 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
 from django.utils import timezone
 
 
@@ -22,6 +24,9 @@ class AlertRule(models.Model):
     enabled = models.BooleanField(default=True)
     session_only = models.BooleanField(default=False)
     min_plan_rank = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    send_to_levels = models.BooleanField(default=True)
+    destinations = models.ManyToManyField('AlertDestination', blank=True,
+        through='AlertRuleDestination', related_name='selected_rules')
 
     def clean(self):
         super().clean()
@@ -48,7 +53,7 @@ class AlertRule(models.Model):
     def save(self, *args, **kwargs):
         if self.pk:
             previous = type(self).objects.get(pk=self.pk)
-            fields = ('series', 'mode', 'values', 'breaker_value', 'threshold', 'window', 'session_only', 'enabled', 'min_plan_rank')
+            fields = ('series', 'mode', 'values', 'breaker_value', 'threshold', 'window', 'session_only', 'enabled', 'min_plan_rank', 'send_to_levels')
             self.revision = previous.revision + int(any(getattr(previous, f) != getattr(self, f) for f in fields))
             if kwargs.get('update_fields') is not None:
                 kwargs['update_fields'] = set(kwargs['update_fields']) | {'revision'}
@@ -60,8 +65,10 @@ class AlertRule(models.Model):
 
 
 class AlertDestination(models.Model):
+    ROUTING_TYPES = [('level', 'Level-based'), ('direct', 'Direct only')]
     name = models.CharField(max_length=100)
     chat_id = models.CharField(max_length=80, unique=True)
+    routing_type = models.CharField(max_length=8, choices=ROUTING_TYPES, default='level')
     plan_rank = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(5)])
     enabled = models.BooleanField(default=False)
     expires_at = models.DateTimeField(null=True, blank=True)
@@ -71,6 +78,29 @@ class AlertDestination(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class AlertRuleDestination(models.Model):
+    rule = models.ForeignKey(AlertRule, on_delete=models.CASCADE)
+    destination = models.ForeignKey(AlertDestination, on_delete=models.PROTECT)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['rule', 'destination'], name='unique_rule_destination')]
+
+
+# Changing selected recipients is a rule revision, including changes via the ORM.
+@receiver(m2m_changed, sender=AlertRule.destinations.through)
+def revise_rule_destinations(sender, instance, action, reverse, pk_set, **kwargs):
+    if action == 'pre_clear' and reverse:
+        instance._routing_rule_ids = list(instance.selected_rules.values_list('pk', flat=True))
+    if action not in ('post_add', 'post_remove', 'post_clear'):
+        return
+    if action != 'post_clear' and not pk_set:
+        return
+    ids = (getattr(instance, '_routing_rule_ids', []) if action == 'post_clear' else pk_set) if reverse else [instance.pk]
+    AlertRule.objects.filter(pk__in=ids).update(revision=models.F('revision') + 1)
+    if not reverse:
+        instance.refresh_from_db(fields=['revision'])
 
 
 class AlertEvaluation(models.Model):
@@ -108,6 +138,8 @@ class AlertDelivery(models.Model):
     claimed_at = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     message_id = models.BigIntegerField(null=True, blank=True)
+    message_ids = models.JSONField(default=list, blank=True)
+    media_group_id = models.CharField(max_length=100, blank=True)
     error = models.CharField(max_length=240, blank=True)
     artifact_path = models.CharField(max_length=500, blank=True)
 

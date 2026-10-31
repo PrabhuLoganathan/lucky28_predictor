@@ -4,7 +4,30 @@
 <div class="card alert-form"><div class="card-body"><form method="post">{% csrf_token %}{% include 'games/alerts/form_fields.html' %}<div class="alert-toolbar"><button class="btn btn-primary px-4" type="submit">Save</button><a class="btn btn-outline-secondary" href="{% url back_url %}">Cancel</a></div></form></div></div>
 {% if rule_form %}{{ values_map|json_script:'alert-values' }}{% endif %}
 {% endblock %}
-{% block scripts %}{% if rule_form %}<script>
+{% block scripts %}<script>
+function showRoutingField(name, visible) {
+  const row = document.querySelector(`[data-field="${name}"]`);
+  if (!row) return;
+  row.hidden = !visible;
+  row.querySelectorAll('input,select').forEach(input => input.disabled = !visible);
+}
+const levelRouting = document.querySelector('input[name="recipients"][value="levels"]');
+if (levelRouting) {
+  const updateRouting = () => showRoutingField('min_plan_rank', levelRouting.checked);
+  levelRouting.addEventListener('change', updateRouting);
+  updateRouting();
+}
+const destinationType = document.getElementById('id_routing_type');
+if (destinationType) {
+  const updateDestination = () => {
+    const levelBased = destinationType.value !== 'direct';
+    showRoutingField('plan_rank', levelBased);
+    showRoutingField('send_health', levelBased);
+  };
+  destinationType.addEventListener('change', updateDestination);
+  updateDestination();
+}
+</script>{% if rule_form %}<script>
 const options = JSON.parse(document.getElementById('alert-values').textContent);
 const series = document.getElementById('id_series'), mode = document.getElementById('id_mode');
 function updateValues() {

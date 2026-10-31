@@ -379,6 +379,31 @@ ingestion does not create duplicate winners or re-send the same activation.
 Cards include symbols, counts, member numbers and a frozen timeline snapshot;
 text fallback remains available if image rendering fails.
 
+### Choose channels and level delivery
+
+Levels run from **1 (low)** to **5 (high)**. A level-based destination receives
+hierarchy rules requiring its level or lower. A **Direct only** destination is
+outside that hierarchy and receives only alerts explicitly assigned to it.
+
+1. In **Destinations**, add “Lucky28(Wheel) - Group Absence Alerts” using its
+   Telegram chat ID or `@username`, choose **Direct only**, and enable it.
+2. In a rule's **Send to** checkboxes, tick any channels and/or **Level hierarchy**.
+   For channel-only delivery, leave **Level hierarchy** unchecked. For both,
+   tick the channels and **Level hierarchy**, then set the minimum destination level.
+   Explicitly selected channels ignore levels; overlapping selections deliver once.
+3. In **Group absence → settings**, tick recipients under **Send to** for each
+   group, or use **Send all groups to → Populate destinations**, then save.
+   Each group's absence and enabled return alerts use those same recipients.
+
+Direct-only channels are excluded from general rule, recent-ten, category, and
+health broadcasts. Disabled or expired selected channels are skipped; other
+selected channels and eligible level destinations still receive their alerts.
+The worker rechecks routing before sending queued messages. Changing a route
+does not replay old return notifications. Assigned destinations are disabled
+instead of deleted so removing a channel cannot revert its rules to broadcasts.
+Existing routing choices are preserved after migration, including channel-only rules.
+Restart an already-running Telegram worker after upgrading to load the new routing.
+
 ### Enable Telegram delivery
 
 1. Open **Alerts → Telegram & worker** and save the bot token and delivery settings.
@@ -387,6 +412,22 @@ text fallback remains available if image rendering fails.
 4. Start the worker through **Telegram & worker → Start worker**.
 5. Inspect **Deliveries** for status and evidence. Send test message explicitly
    queues a real test to that destination.
+
+Destinations with image cards enabled receive data alerts as one Telegram album
+containing three 1600×1600 images: **Alert details**, **Analytics**, and
+**Verification timeline**. The timeline retains all saved entries (up to 150),
+newest first, in a 15-column grid. Every page repeats the same round and capture
+time in IST and renders from the same outgoing saved payload. Existing eligibility
+and correction checks still run before rendering; rendering does not read live data.
+Only the first image carries the short condition caption. Telegram controls the
+album's mosaic preview. Health warnings remain single cards and test messages remain text.
+
+**Deliveries** archives all three images, the exact caption, and the album's
+message IDs. A response is confirmed only when all three messages are acknowledged.
+Rate limits reschedule the album; ambiguous network responses are not resent.
+If rendering fails before sending, the existing text fallback is used.
+Generate local previews without sending anything using
+`.venv/bin/python scripts/preview_alert_cards.py`.
 
 Starting `run.py` does not start the Telegram worker. For a terminal-managed worker:
 

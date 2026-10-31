@@ -1,5 +1,6 @@
 from django import forms
 from games.group_config import COLOR_GROUPS, MAX_GROUP_THRESHOLD, parse_threshold
+from games.alert_forms import RecipientField, recipient_choices, initial_recipients
 
 
 class GroupAbsenceSettingsForm(forms.Form):
@@ -9,6 +10,7 @@ class GroupAbsenceSettingsForm(forms.Form):
     def __init__(self, *args, stream, states, **kwargs):
         super().__init__(*args, **kwargs)
         self.initial['enabled'] = stream.enabled
+        choices = recipient_choices()
         by_id = {state.group_id: state for state in states}
         for group in COLOR_GROUPS:
             self.fields[f'{group.id}_enabled'] = forms.BooleanField(required=False,
@@ -18,6 +20,9 @@ class GroupAbsenceSettingsForm(forms.Form):
                                              'pattern': '[0-9]+', 'maxlength': 7,
                                              'data-max': MAX_GROUP_THRESHOLD, 'autocomplete': 'off'}))
             state = by_id[group.id]
+            self.fields[f'{group.id}_recipients'] = RecipientField(required=False,
+                label=f'{group.name}: send to', choices=choices)
+            self.initial[f'{group.id}_recipients'] = initial_recipients(state)
             self.initial[f'{group.id}_enabled'] = state.enabled
             self.initial[f'{group.id}_threshold'] = state.threshold
             self.fields[f'{group.id}_ending_enabled'] = forms.BooleanField(required=False,
@@ -34,6 +39,8 @@ class GroupAbsenceSettingsForm(forms.Form):
         cleaned = super().clean()
         from django.core.exceptions import ValidationError
         for group in COLOR_GROUPS:
+            if (cleaned.get(f'{group.id}_enabled') or cleaned.get(f'{group.id}_ending_enabled')) and not cleaned.get(f'{group.id}_recipients'):
+                self.add_error(f'{group.id}_recipients', 'Select at least one channel or Level hierarchy.')
             for mode in ('', 'ending_'):
                 field = f'{group.id}_{mode}threshold'
                 try:
@@ -45,11 +52,14 @@ class GroupAbsenceSettingsForm(forms.Form):
     def group_values(self):
         return {group.id: {'enabled': self.cleaned_data[f'{group.id}_enabled'],
                            'threshold': self.cleaned_data[f'{group.id}_threshold'],
+                           'send_to_levels': 'levels' in self.cleaned_data[f'{group.id}_recipients'],
+                           'destination_ids': sorted(int(v) for v in self.cleaned_data[f'{group.id}_recipients'] if v != 'levels'),
                            'ending_enabled': self.cleaned_data[f'{group.id}_ending_enabled'],
                            'ending_threshold': self.cleaned_data[f'{group.id}_ending_threshold']} for group in COLOR_GROUPS}
 
     def group_rows(self):
         return [{'group': group, 'enabled': self[f'{group.id}_enabled'],
                  'threshold': self[f'{group.id}_threshold'],
+                 'recipients': self[f'{group.id}_recipients'],
                  'ending_enabled': self[f'{group.id}_ending_enabled'],
                  'ending_threshold': self[f'{group.id}_ending_threshold']} for group in COLOR_GROUPS]

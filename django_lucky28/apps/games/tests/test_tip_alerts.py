@@ -90,7 +90,7 @@ class TipAlertTests(TestCase):
         self.rules[0].refresh_from_db()
         self.assertEqual(self.rules[0].threshold, 4)
         form = AlertRuleForm(data=dict(title='TIP density', series='tip', mode='density_low',
-            values=['TIP'], threshold=3, window=10, min_plan_rank=1, enabled='on'))
+            values=['TIP'], threshold=3, window=10, min_plan_rank=1, recipients=['levels'], enabled='on'))
         self.assertTrue(form.is_valid(), form.errors)
 
     @override_settings(ALERT_TELEGRAM_ENABLED=True, ALERT_TELEGRAM_BOT_TOKEN='test-only')

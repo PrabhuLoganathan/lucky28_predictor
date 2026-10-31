@@ -24,7 +24,7 @@ class AlertManagementTests(TestCase):
 
     def rule_data(self, **changes):
         return dict(dict(title='Big streak', series='size', mode='streak', values=['Big'], threshold=3,
-                         min_plan_rank=1, enabled='on'), **changes)
+                         min_plan_rank=1, recipients=['levels'], enabled='on'), **changes)
 
     def destination(self):
         return AlertDestination.objects.create(name='My channel', chat_id='-10012345', enabled=True)
@@ -207,5 +207,5 @@ class AlertManagementTests(TestCase):
         response = self.client.get(f'/alerts/history/{evaluation.pk}/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Round ui-test')
-        self.assertContains(response, 'Preview card')
+        self.assertContains(response, 'Verification timeline')
         self.assertEqual(self.client.get(f'/alerts/evidence/{evaluation.pk}/').json(), evaluation.evidence)

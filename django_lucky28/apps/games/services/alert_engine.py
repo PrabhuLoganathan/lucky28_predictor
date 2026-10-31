@@ -55,6 +55,8 @@ def evaluate_rules(rules, facts, prior_active=()):
                                 threshold=rule.threshold, window=rule.window,
                                 detail=label_color_groups(detail) if rule.series == 'color' else detail,
                                 min_plan_rank=rule.min_plan_rank,
+                                send_to_levels=getattr(rule, 'send_to_levels', True),
+                                destination_ids=[d.pk for d in rule.destinations.all()] if hasattr(rule, 'destinations') else [],
                                 scope='Current server session' if rule.session_only else 'Completed history',
                                 is_activation=mode == 'every_game' or identity not in prior_active))
     return matches

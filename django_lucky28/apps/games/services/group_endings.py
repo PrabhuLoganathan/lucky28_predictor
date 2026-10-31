@@ -67,7 +67,7 @@ def reconcile(stream, states, history, previous_round, saved_games):
                                                   ending_round=game.game_no, snapshot=snapshot)
         # Fan out only when the ending is created, never replay old endings to
         # newly added destinations or after changing thresholds.
-        for destination in eligible_destinations(timezone.now()):
+        for destination in eligible_destinations(timezone.now(), [d.pk for d in state.destinations.all()], state.send_to_levels):
             queue_delivery(f'group-end:{event.pk}:{destination.pk}', destination, 'group_end',
                            dict(snapshot, event_id=event.pk))
     saved_by_id = {game.game_no: game for game in saved_games}

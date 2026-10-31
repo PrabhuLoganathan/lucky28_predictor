@@ -1,6 +1,7 @@
 """First-party alert screens for the local dashboard and authenticated staff."""
 from functools import wraps
 from html import unescape
+import json
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -21,6 +22,7 @@ from .alert_forms import AlertRuleForm, AlertDestinationForm, AlertSettingsForm,
 from .models import AlertRule, AlertDestination, AlertDelivery, AlertEvaluation, AlertRuntime, AlertSettings
 from .services.alert_engine import default_rules
 from .services.alert_presentation import render_card, format_message
+from .services.alert_album import render_album, PAGE_TITLES
 from .services.alert_settings import get_config, save_token
 from .services.alert_worker import start_worker, stop_worker, worker_running
 from .services.alerts import queue_delivery
@@ -46,7 +48,7 @@ def paginated(request, queryset):
 
 @management_access
 def rules(request):
-    queryset = AlertRule.objects.order_by('series', 'title')
+    queryset = AlertRule.objects.prefetch_related('destinations').order_by('series', 'title')
     search = request.GET.get('q', '').strip()
     if search:
         queryset = queryset.filter(Q(title__icontains=search) | Q(key__icontains=search))
@@ -65,7 +67,7 @@ def rule_edit(request, pk=None):
     form = AlertRuleForm(request.POST if request.method == 'POST' else None, instance=instance)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        messages.success(request, 'Rule saved. Changes apply to future rounds.')
+        messages.success(request, 'Rule saved. Changes apply to future rounds; queued alerts are checked against the current routing before sending.')
         return redirect('alert_rules')
     return render(request, 'games/alerts/form.html', dict(form=form, title='Edit rule' if pk else 'Create rule',
         subtitle='Choose the results and pattern to watch. Existing evidence stays unchanged.',
@@ -148,10 +150,10 @@ def destination_delete(request, pk):
         except ProtectedError:
             destination.enabled = False
             destination.save(update_fields=['enabled'])
-            messages.info(request, 'Destination disabled. It is retained because it has delivery history.')
+            messages.info(request, 'Destination disabled. It is retained because it has delivery history or assigned alerts.')
         return redirect('alert_destinations')
     return render(request, 'games/alerts/confirm.html', dict(alert_tab='destinations', title='Remove destination',
-        object_name=destination.name, explanation='Destinations with delivery history will be disabled instead of deleted, preserving the record.', back_url='alert_destinations'))
+        object_name=destination.name, explanation='Destinations with delivery history or assigned alerts will be disabled instead of deleted.', back_url='alert_destinations'))
 
 
 @management_access
@@ -228,9 +230,20 @@ def deliveries(request):
 @management_access
 def delivery_detail(request, pk):
     delivery = get_object_or_404(AlertDelivery.objects.select_related('destination', 'evaluation'), pk=pk)
+    directory = Path(settings.ALERT_STATE_DIR) / 'artifacts'
+    text = format_message(delivery.payload, delivery.kind)
+    count = int((directory / f'{pk}.jpg').is_file())
+    try:
+        artifact = json.loads((directory / f'{pk}.json').read_text())
+        count = artifact.get('image_count', count)
+        data = artifact['data']
+        text = json.loads(data['media'])[0]['caption'] if artifact['method'] == 'sendMediaGroup' else data.get('caption', data.get('text', text))
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        pass
     return render(request, 'games/alerts/delivery_detail.html', dict(alert_tab='deliveries', delivery=delivery,
-        formatted_text=unescape(format_message(delivery.payload, delivery.kind).replace('<b>', '').replace('</b>', '').replace('<i>', '').replace('</i>', '')),
-        has_image=(Path(settings.ALERT_STATE_DIR) / 'artifacts' / f'{delivery.pk}.jpg').is_file()))
+        formatted_text=unescape(text.replace('<b>', '').replace('</b>', '').replace('<i>', '').replace('</i>', '')),
+        images=[dict(number=index, title=PAGE_TITLES[index-1] if count == 3 else 'Archived alert card')
+                for index in range(1, min(count, 3)+1)]))
 
 
 @management_access
@@ -253,7 +266,11 @@ def delivery_action(request, pk, action):
 @management_access
 def delivery_image(request, pk):
     get_object_or_404(AlertDelivery, pk=pk)
-    path = Path(settings.ALERT_STATE_DIR) / 'artifacts' / f'{pk}.jpg'
+    page = request.GET.get('page', '1')
+    if page not in ('1', '2', '3'):
+        return HttpResponse('Unknown album page.', status=404)
+    suffix = '' if page == '1' else f'-{page}'
+    path = Path(settings.ALERT_STATE_DIR) / 'artifacts' / f'{pk}{suffix}.jpg'
     if not path.is_file():
         return HttpResponse('No image was archived for this delivery.', status=404)
     return FileResponse(path.open('rb'), content_type='image/jpeg')
@@ -262,13 +279,18 @@ def delivery_image(request, pk):
 @management_access
 def evidence_detail(request, pk):
     evaluation = get_object_or_404(AlertEvaluation, pk=pk)
-    return render(request, 'games/alerts/evidence.html', {'alert_tab': 'overview', 'evaluation': evaluation})
+    return render(request, 'games/alerts/evidence.html', {'alert_tab': 'overview', 'evaluation': evaluation,
+        'album_pages': [dict(number=i, title=title) for i, title in enumerate(PAGE_TITLES, 1)]})
 
 
 @management_access
 def evidence_card(request, pk):
     evaluation = get_object_or_404(AlertEvaluation, pk=pk)
+    page = request.GET.get('page')
+    if page is not None and page not in ('1', '2', '3'):
+        return HttpResponse('Unknown album page.', status=404)
     try:
-        return HttpResponse(render_card(evaluation.evidence), content_type='image/jpeg')
+        content = render_album(evaluation.evidence)[int(page)-1] if page else render_card(evaluation.evidence)
+        return HttpResponse(content, content_type='image/jpeg')
     except Exception:
         return HttpResponse('Image preview is unavailable. All evidence is available on the details page.', status=503)

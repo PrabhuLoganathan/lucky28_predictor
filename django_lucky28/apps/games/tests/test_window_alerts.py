@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -214,13 +215,13 @@ class WindowAlertTests(TestCase):
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, 'pending')
         AlertDelivery.objects.filter(pk=delivery.pk).update(available_at=timezone.now())
-        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': {'message_id': 42}}))
+        post.return_value = Mock(status_code=200, json=Mock(return_value={'ok': True, 'result': [{'message_id': i, 'media_group_id': 'album-test'} for i in (42, 43, 44)]}))
         deliver_one(delivery.pk)
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, 'sent')
         self.assertEqual(delivery.dedup_key, key)
-        self.assertEqual(post.call_args.args[0].split('/')[-1], 'sendPhoto')
-        self.assertIn('All 10 completed results are different', post.call_args.kwargs['data']['caption'])
+        self.assertEqual(post.call_args.args[0].split('/')[-1], 'sendMediaGroup')
+        self.assertIn('All 10 completed results are different', json.loads(post.call_args.kwargs['data']['media'])[0]['caption'])
         self.result(110, 9)
         delivery = AlertDelivery.objects.latest('pk')
         text = format_message(delivery.payload, 'window')
