@@ -31,12 +31,18 @@ def eligible_destinations(now, destination_ids=(), send_to_levels=True, minimum=
 
 def game_facts(history, upcoming=None):
     from .tips import tip_facts
+    from .timeline import adjacent, new_repeat_history
+    tags = new_repeat_history(history)
+    new_repeat = [tag['kind'].title() if tag['kind'] else None for tag in tags]
+    if upcoming and history and not adjacent(upcoming, history[0]):
+        new_repeat = []
     return {
         'size': [g.size_label for g in history],
         'parity': [g.parity_label for g in history],
         'color': [AnalysisService.get_color(g.winning_number) for g in history],
         'number': [str(g.winning_number) for g in history],
         'tip': tip_facts(history, upcoming),
+        'new_repeat': new_repeat,
     }
 
 

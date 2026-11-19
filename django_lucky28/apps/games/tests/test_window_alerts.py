@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import requests
 from django.test import TestCase, SimpleTestCase, override_settings
+from django.core.management import call_command
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -17,6 +18,7 @@ from games.services.repetition import summarize_window
 from games.services.analysis import AnalysisService
 from games.services.alert_delivery import deliver_one
 from games.services.alert_presentation import format_message
+from games.services.alert_routing import routing_allowed
 
 
 class WindowFactsTests(SimpleTestCase):
@@ -94,6 +96,22 @@ class WindowAlertTests(TestCase):
         self.assertEqual(current_window('lucky28')['status'], 'Drought')
         self.assertEqual(WindowAlertEvent.objects.filter(kind='drought').count(), 2)
         self.assertEqual(WindowAlertEvent.objects.filter(kind='repeat').count(), 1)
+
+    def test_direct_channel_receives_only_drought_and_routing_is_rechecked(self):
+        direct = AlertDestination.objects.create(name='New numbers', chat_id='-100123',
+            enabled=True, routing_type='direct')
+        self.enable(drought=False, repeat=True)
+        call_command('configure_window_drought_channel', chat_id=direct.chat_id, verbosity=0)
+        self.sequence(range(10))
+        drought = AlertDelivery.objects.get(kind='window', destination=direct)
+        self.assertEqual(drought.payload['kind'], 'drought')
+        self.assertTrue(routing_allowed(drought))
+        self.assertTrue(AlertDelivery.objects.filter(kind='window', destination=self.destination).exists())
+        self.result(110, 9)
+        self.assertFalse(AlertDelivery.objects.filter(kind='window', destination=direct, payload__kind='repeat').exists())
+        self.assertTrue(AlertDelivery.objects.filter(kind='window', destination=self.destination, payload__kind='repeat').exists())
+        WindowAlertState.objects.get().drought_destinations.remove(direct)
+        self.assertFalse(routing_allowed(drought))
 
     def test_newest_repeat_boundary_nine_prior_results_and_old_pair(self):
         self.enable(drought=False)

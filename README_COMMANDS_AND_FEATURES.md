@@ -708,8 +708,9 @@ change trigger thresholds or result calculations.
 The palette's **Newest** results also have a **Newest display** selector for
 Number, Size, Parity, Combination, Board rows, Board columns, Colors, and Extreme
 numbers. Choose a view directly or click a result circle / View button to cycle.
-Rows show R1–R4, columns C1–C7, and colors G1–G7, with matching legends.
-Extreme numbers show J for edges (0–5 and 22–27) and M for middle (6–21).
+Rows show R1–R4 and columns show C1–C7. The Colors view and color alerts use
+Red, Orange, Magenta, Blue, Cyan / Teal, Green, and Grey.
+Extreme numbers show J for edges (0–6 and 21–27) and M for middle (7–20).
 Game details include all these classifications. The selected view stays active
 during live refreshes and scrolling through the latest 150 results.
 
@@ -737,7 +738,7 @@ No trigger settings or thresholds change, and no old alerts are replayed.
 
 New cards show up to 150 frozen results in ten columns of colored circles, newest
 first. The vocabulary follows the alert: numbers, B/S, E/O, SE/BE/BO/SO, R1–R4,
-C1–C7, G1–G7, J/M (extreme edges/middle), or O/I (outer/inner board).
+C1–C7, color names, J/M (extreme edges/middle), or O/I (outer/inner board).
 Number circles use their color group. Gap analytics remains on applicable cards.
 New/Repeated labels compare each number against its preceding ten completed
 rounds; only the newest result carries the current N×/R× run count. Missing
@@ -766,3 +767,74 @@ Generate local fictional previews without sending Telegram messages:
 ```bash
 .venv/bin/python scripts/preview_alert_cards.py
 ```
+
+### Dedicated new-number alert channel
+
+Create **Lucky28 New Number Alerts** and add the alert bot as an administrator.
+After applying migrations, connect a new private channel with its numeric chat ID:
+
+```bash
+.venv/bin/python django_lucky28/manage.py sync_new_number_alerts --chat-id=-100YOUR_CHANNEL_ID
+```
+
+Two separate rules alert on five consecutive New results and at least 11 New
+results in the latest 15. New means absent from the preceding ten completed
+rounds, matching the timeline. Missing history or gaps prevent a classification.
+The engine evaluates completed results when the next round opens; each condition
+fires on activation and re-arms when it clears. The command creates a direct-only
+destination, disables level-based routing for these rules, and rejects an existing
+chat. It does not send a Telegram message. The existing worker must be running.
+
+### Dedicated tip alert channel
+
+Recommended channel name: **Lucky28 Tip Alerts**. Create the Telegram channel and
+add the configured alert bot as an administrator with permission to post. Then run:
+
+```bash
+.venv/bin/python django_lucky28/manage.py sync_tip_alerts --chat-id '@your_tip_channel'
+```
+
+Use a numeric chat ID for a private channel. This creates a new enabled **Direct
+only** destination with cards enabled and health/result messages disabled. It routes
+all tip rules exclusively to that destination, preserving their saved conditions,
+thresholds and enabled states. Other alert rules keep their existing routing.
+The default tip conditions are 3 consecutive games without a TIP, and at most
+3 TIPs in the last 10 games. The existing Telegram settings and
+`run_alert_messaging` worker deliver the same tip alert payload and cards.
+No message is sent by the setup command itself. An already-configured chat is
+rejected to avoid changing another channel's routing; subsequent routing edits
+can be made in Alerts. Without `--chat-id`, the command only installs missing tip rules.
+
+### Separate combination, extreme-number and board-border channels
+
+Create one Telegram channel per family and add the existing alert bot as an
+administrator with posting permission. Suggested names are **Lucky28 Combination
+Alerts**, **Lucky28 Extreme Number Alerts**, and **Lucky28 Board Border Alerts**.
+Configure each with its own new chat ID:
+
+```bash
+.venv/bin/python django_lucky28/manage.py configure_category_channel combinations --chat-id=-100YOUR_COMBINATION_ID
+.venv/bin/python django_lucky28/manage.py configure_category_channel extremes --chat-id=-100YOUR_EXTREME_ID
+.venv/bin/python django_lucky28/manage.py configure_category_channel borders --chat-id=-100YOUR_BORDER_ID
+```
+
+Combinations covers SE, BE, BO and SO; extremes covers edges (0–6 and 21–27)
+and middle (7–20); borders covers the outer board border and inner board center.
+Each command routes both absence and streak rules for its family exclusively to
+that channel. Existing thresholds, enabled states and follow-up settings are
+preserved. Unset thresholds remain disabled until configured in category alert
+settings. Cards are enabled; general result and health messages are disabled.
+Category ending notifications follow the original alert to its channel when the
+existing category follow-up setting is enabled. Changed routing is checked again
+before queued alerts send. Previously configured chat IDs are rejected to prevent
+accidentally repurposing a channel.
+
+For all four rows in one dedicated **Lucky28 Row Alerts** channel, use:
+
+```bash
+.venv/bin/python django_lucky28/manage.py configure_category_channel rows --chat-id=-100YOUR_ROW_CHANNEL_ID
+```
+
+This preserves the saved thresholds and enabled states for R01–R04, routes their
+absence/streak alerts exclusively to the new channel, and leaves other category
+families unchanged. Add the existing bot as an administrator with posting permission.

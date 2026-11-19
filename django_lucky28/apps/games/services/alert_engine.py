@@ -91,3 +91,11 @@ def tip_rules():
                mode='absence', values=['TIP'], threshold=3, window=0, enabled=True)
     yield dict(key='tip_density_low_10', title='TIP low density — at most 3 in 10', series='tip',
                mode='density_low', values=['TIP'], threshold=3, window=10, enabled=True)
+
+
+def new_number_rules():
+    # Explicit recipients only: these rules must never broadcast by subscription level.
+    yield dict(key='new_number_streak_5', title='5 consecutive new numbers', series='new_repeat',
+               mode='streak', values=['New'], threshold=5, window=0, enabled=True, send_to_levels=False)
+    yield dict(key='new_number_density_15', title='At least 11 new numbers in 15', series='new_repeat',
+               mode='density', values=['New'], threshold=11, window=15, enabled=True, send_to_levels=False)

@@ -209,14 +209,14 @@
   function recentColors() {
     const groups=data?.stream===el('stream').value?data.group_stats??[]:[];
     if(recentMode===0 || recentMode===6)return groups.filter(group=>group.family==='Colors')
-      .map(group=>({key:recentMode===0?group.key:`G${Number(group.key.slice(1))}`,label:group.label,color:group.color,numbers:group.numbers}));
+      .map(group=>({key:group.key,label:group.label,color:group.color,numbers:group.numbers}));
     const track=recentTracks[recentMode];
     if(recentMode===4 || recentMode===5)return groups.filter(group=>group.family===(recentMode===4?'Rows':'Columns'))
       .map((group,index)=>({key:`${group.key[0]}${Number(group.key.slice(1))}`,label:group.label,numbers:group.numbers,
         color:data?.tracks?.find(item=>item.tracker_key===track)?.legend[index]?.color??boardColors[index]}));
     if(recentMode===7)return [
-      {key:'J',label:'Edges · 0–5, 22–27',color:'#fbbf24'},
-      {key:'M',label:'Middle · 6–21',color:'#94a3b8'}];
+      {key:'J',label:'Edges · 0–6, 21–27',color:'#fbbf24'},
+      {key:'M',label:'Middle · 7–20',color:'#94a3b8'}];
     if(recentMode===8)return [
       {key:'O',label:'Outer edges · 18 numbers',color:'#f43f5e'},
       {key:'I',label:'Inner center · 10 numbers',color:'#06b6d4'}];
@@ -233,8 +233,8 @@
     const color=(data?.group_stats??[]).find(group=>group.family==='Colors' && group.numbers.includes(game.number));
     const isBorder=game.number<7||game.number>=21||game.number%7===0||game.number%7===6;
     return {size,parity,combo:size+parity,row:`R${Math.floor(game.number/7)+1}`,column:`C${game.number%7+1}`,
-      color:color?`G${Number(color.key.slice(1))}`:'?',colorName:color?.label??'Color unavailable',
-      extreme:game.number<=5 || game.number>=22?'J':'M',
+      color:color?.key??'?',colorName:color?.label??'Color unavailable',
+      extreme:game.number<=6 || game.number>=21?'J':'M',
       border:isBorder?'O':'I'};
   }
   function focusRecent(game) {recentFocused=game.game_no;recentRecord=game;updateRecentDetails();}
@@ -243,7 +243,7 @@
     recentDetails.setAttribute('aria-expanded',String(!recentInfo.hidden));
     if(!recentRecord){recentInfo.hidden=true;recentDetails.setAttribute('aria-expanded','false');recentInfoText.textContent='';recentLink.removeAttribute('href');return;}
     const {size,parity,combo,row,column,colorName,extreme,border}=recentClassification(recentRecord);
-    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–5, 22–27)':'Middle (6–21)'} · ${border==='O'?'Outer edges (18)':'Inner center (10)'}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
+    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–6, 21–27)':'Middle (7–20)'} · ${border==='O'?'Outer edges (18)':'Inner center (10)'}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
     recentInfoText.textContent += ` · ${tipDescription(recentRecord)}`;
     recentLink.textContent=`Open round #${recentRecord.game_no} ↗`;recentLink.href=recentRecord.url;
     recentDetails.title=`Details for round #${recentRecord.game_no}`;
@@ -281,7 +281,7 @@
     const colors=recentColors();
     recentLegend.replaceChildren(...colors.map(item=>{
       const entry=make('span'),swatch=make('i');swatch.style.backgroundColor=item.color;swatch.setAttribute('aria-hidden','true');
-      entry.append(swatch,document.createTextNode(recentMode===0?item.label:`${item.key} · ${item.label}`));
+      entry.append(swatch,document.createTextNode(recentMode===0||recentMode===6?item.label:`${item.key} · ${item.label}`));
       if(item.numbers)entry.title=item.numbers.join(', ');return entry;
     }));
     recentLegend.hidden=!recent.length;
@@ -296,10 +296,12 @@
       }
       control.roundRecord=game;
       const classification=recentClassification(game),{size,parity,combo,row,column,colorName,extreme,border}=classification;
-      const label=recentMode===0?game.number:classification[recentTracks[recentMode]];
-      const colorGroup=colors.find(item=>recentMode===0?item.numbers.includes(game.number):item.key===label);
+      const key=recentMode===0?game.number:classification[recentTracks[recentMode]];
+      const label=recentMode===6?colorName:key;
+      const colorGroup=colors.find(item=>recentMode===0?item.numbers.includes(game.number):item.key===key);
       control.style.setProperty('--recent-color',colorGroup?.color??'#aab0bb');
       control.dataset.colorGroup=colorGroup?.key??'unknown';
+      control.classList.toggle('tl-color-name', recentMode===6);
       control.firstChild.textContent=label;
       decorateTipCircle(control.firstChild, game);
       control.classList.toggle('is-tip', game.tip?.status === 'TIP');
@@ -610,7 +612,8 @@
           if (game.game_no === selected) td.classList.add('tl-selected');
           if (item) {
             const state = track.legend.find(s => s.letter === item.letter);
-            const dot = button(item.letter === 'A' ? String(game.alerts.length) : item.letter, () => {selected = game.game_no; render();});
+            const display = track.tracker_key === 'color' ? state.label.split(' · ')[0] : item.letter;
+            const dot = button(item.letter === 'A' ? String(game.alerts.length) : display, () => {selected = game.game_no; render();});
             dot.className = 'tl-dot'; dot.style.setProperty('--dot-color', state.color);
             decorateTipCircle(dot, game);
             dot.title = `Game #${game.game_no} · Number ${game.number} · ${state.label}${game.alerts.length ? ` · ${game.alerts.length} saved alerts` : ''}`;
@@ -624,7 +627,7 @@
           const legendRow = make('tr', undefined, 'tl-legend-row'); legendRow.append(make('th', '', 'tl-row-label'));
           const td = make('td'); td.colSpan = games.length;
           const legend = make('div', undefined, 'tl-legend');
-          track.legend.forEach(s => {const span = make('span'); const dot = make('i'); dot.style.background = s.color; span.append(dot, document.createTextNode(`${s.letter} ${s.label}`)); legend.append(span);});
+          track.legend.forEach(s => {const span = make('span'); const dot = make('i'); dot.style.background = s.color; span.append(dot, document.createTextNode(track.tracker_key === 'color' ? s.label : `${s.letter} ${s.label}`)); legend.append(span);});
           td.append(legend); legendRow.append(td); body.append(legendRow);
         }
       });

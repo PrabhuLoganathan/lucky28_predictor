@@ -13,6 +13,9 @@ class CategoryAlertSettings(models.Model):
 
 
 class CategoryAlertRule(models.Model):
+    send_to_levels = models.BooleanField(default=True)
+    destinations = models.ManyToManyField('games.AlertDestination', blank=True,
+                                         related_name='category_rules')
     settings = models.ForeignKey(CategoryAlertSettings, on_delete=models.CASCADE, related_name='rules')
     group_id = models.CharField(max_length=16)
     mode = models.CharField(max_length=7, choices=[('absence', 'Absence'), ('streak', 'Consecutive streak')])

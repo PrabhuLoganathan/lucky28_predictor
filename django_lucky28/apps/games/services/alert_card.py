@@ -74,8 +74,14 @@ def focus_track(payload, kind, snapshot):
     # Derivation is safe for legacy snapshots too: only their frozen numbers are used.
     games = [SimpleNamespace(winning_number=g['number']) for g in snapshot.get('games', [])]
     title, legend = TRACKS[key]
-    return dict(key=key, title=title, legend=legend,
-                letters=[classify(key, games, i) for i in range(len(games))])
+    letters = [classify(key, games, i) for i in range(len(games))]
+    labels = [GROUP_BY_NUMBER[g.winning_number].name for g in games] if key == 'color' else letters
+    return dict(key=key, title=title, legend=legend, letters=letters, labels=labels)
+
+
+def card_legend_label(state, focus_key):
+    name = state['label'].split(' · ')[0]
+    return name if focus_key in ('color', 'number') else f'{state["letter"]} {name}'
 
 
 def card_model(payload, kind):
@@ -348,7 +354,10 @@ def render_card(payload, kind='alert', budget=2.0):
                 points = [(bx+math.cos(-math.pi/2+k*math.pi/5)*(8 if k%2==0 else 3.5),
                            by+math.sin(-math.pi/2+k*math.pi/5)*(8 if k%2==0 else 3.5)) for k in range(10)]
                 draw.polygon(points,fill=BG)
-            text(x,cy,letter,bold[24],WHITE,'mm')
+            label = focus['labels'][i]
+            font = next((fonts[size] for size in (20, 16, 13, 11, 10) if fonts[size].getlength(label) <= 55),
+                        fonts[10]) if focus['key'] == 'color' else bold[24]
+            text(x,cy,label,font,WHITE,'mm')
             state=g.get('new_repeat') or {}
             tag_kind=state.get('kind')
             tag='New' if tag_kind=='new' else 'Repeated' if tag_kind=='repeated' else state.get('reason','Not saved')
@@ -362,7 +371,7 @@ def render_card(payload, kind='alert', budget=2.0):
         x=54
         shown_legend=TRACKS['color'][1] if focus['key']=='number' else focus['legend']
         for state in shown_legend:
-            label=f'{state["letter"]} {state["label"].split(" · ")[0]}'
+            label=card_legend_label(state, focus['key'])
             width=fonts[18].getlength(label)+30
             if x+width>1020: x=54; ly+=27
             draw.ellipse((x,ly+4,x+9,ly+13),fill=state['color'])

@@ -225,7 +225,8 @@ class GroupAbsenceTests(TestCase):
         self.assertTrue(event.snapshot['lower_bound'])
         self.assertIsNone(event.snapshot['last_number'])
         text = format_message(event.snapshot, 'group')
-        for expected in ('G01', 'Red', '[0, 1, 26, 27]', 'at least 2', 'Threshold: 2',
+        self.assertNotIn('G01', text)
+        for expected in ('Red', '[0, 1, 26, 27]', 'at least 2', 'Threshold: 2',
                          'Not seen in available history', 'R101', 'Alert time:', '/games/detail/R101/'):
             self.assertIn(expected, text)
 

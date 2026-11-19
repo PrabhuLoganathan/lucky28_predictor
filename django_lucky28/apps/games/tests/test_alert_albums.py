@@ -55,17 +55,18 @@ class AlbumRenderTests(SimpleTestCase):
         letters = []
         original = Page.text
         def record(page, x, y, value, size=28, *args, **kwargs):
-            if size == 26 and kwargs.get('anchor') == 'ma':
+            if kwargs.get('bold') and kwargs.get('anchor') == 'ma' and value != '*':
                 letters.append(str(value))
             return original(page, x, y, value, size, *args, **kwargs)
         with patch.object(Page, 'text', record):
             timeline_page(evidence, 'alert', model, lambda: None)
-        self.assertEqual(letters, model['focus']['letters'])
+        self.assertEqual(letters, model['focus']['labels'])
+        self.assertEqual(set(letters), {'Red', 'Orange', 'Magenta', 'Blue', 'Cyan / Teal', 'Green', 'Grey'})
         self.assertEqual(len(letters), 150)
 
     def test_short_caption_contains_condition_members_round_and_ist_time(self):
         caption = format_album_caption(payload(), 'alert')
-        self.assertIn('🟡 <b>YELLOW GROUP — ABSENCE</b>', caption)
+        self.assertIn('🟠 <b>ORANGE GROUP — ABSENCE</b>', caption)
         self.assertIn('Absent for: 1 completed round', caption)
         self.assertIn('Numbers: 2, 3, 24, 25', caption)
         self.assertIn('Round: 202610290864', caption)

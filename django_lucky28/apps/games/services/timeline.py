@@ -31,7 +31,7 @@ TRACKS = {
     'color': ('Color groups', states(*[(f'G{i+1}', f'{g.name} · {", ".join(map(str, g.numbers))}', g.color) for i, g in enumerate(COLOR_GROUPS)])),
     'row': ('Board rows', states(*[(f'R{i+1}', f'{g.name} · {", ".join(map(str, g.numbers))}', PALETTE[i]) for i, g in enumerate(ROW_GROUPS)])),
     'column': ('Board columns', states(*[(f'C{i+1}', f'{g.name} · {", ".join(map(str, g.numbers))}', PALETTE[i]) for i, g in enumerate(COLUMN_GROUPS)])),
-    'extreme': ('Extreme numbers', states(('J', 'Edges · 0–5, 22–27', '#fbbf24'), ('M', 'Middle · 6–21', '#94a3b8'))),
+    'extreme': ('Extreme numbers', states(('J', 'Edges · 0–6, 21–27', '#fbbf24'), ('M', 'Middle · 7–20', '#94a3b8'))),
     'border': ('Board border', states(('O', 'Outer edges · 18 numbers', '#f43f5e'), ('I', 'Inner center · 10 numbers', '#06b6d4'))),
     'repeat': ('Repeat in previous 2', states(('R', 'Same number as either previous 2 games', '#34d399'), ('N', 'Different from both previous games', '#38bdf8'), UNKNOWN)),
     'window': ('10-game repeat / drought', states(('R', 'A number repeats in this 10-game window', '#34d399'), ('D', 'All 10 numbers are different', '#fbbf24'), UNKNOWN)),
@@ -111,7 +111,7 @@ def classify(key, games, index):
     if key == 'color': return f'G{int(GROUP_BY_NUMBER[n].id[1:])}'
     if key == 'row': return f'R{n // 7 + 1}'
     if key == 'column': return f'C{n % 7 + 1}'
-    if key == 'extreme': return 'J' if n <= 5 or n >= 22 else 'M'
+    if key == 'extreme': return 'J' if n <= 6 or n >= 21 else 'M'
     if key == 'border': return 'O' if (n < 7 or n >= 21 or n % 7 == 0 or n % 7 == 6) else 'I'
     needed = 3 if key == 'repeat' else 10
     window = games[index:index + needed]

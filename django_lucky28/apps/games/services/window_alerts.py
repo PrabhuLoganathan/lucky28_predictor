@@ -143,7 +143,8 @@ def synchronize(key='lucky28', evaluate_current=True):
         event, _ = WindowAlertEvent.objects.get_or_create(stream=stream, kind=kind, occurrence_key=occurrence,
             defaults={'snapshot': event_snapshot(key, kind, window)})
     if not event.invalidated_at:
-        for destination in eligible_destinations(timezone.now()):
+        direct_ids = state.drought_destinations.values_list('pk', flat=True) if kind == 'drought' else ()
+        for destination in eligible_destinations(timezone.now(), destination_ids=direct_ids):
             queue_delivery(f'window:{event.pk}:{destination.pk}', destination, 'window', dict(event.snapshot, event_id=event.pk))
     return state
 

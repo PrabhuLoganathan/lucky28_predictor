@@ -7,6 +7,8 @@ class WindowAlertState(models.Model):
     stream = models.OneToOneField('games.GroupAbsenceStream', on_delete=models.CASCADE, primary_key=True)
     drought_enabled = models.BooleanField(default=False)
     repeat_enabled = models.BooleanField(default=False)
+    drought_destinations = models.ManyToManyField('games.AlertDestination', blank=True,
+        related_name='window_drought_states')
     snapshot = models.JSONField(default=dict)
     updated_at = models.DateTimeField(default=timezone.now)
 

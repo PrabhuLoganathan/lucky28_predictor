@@ -53,7 +53,7 @@ class TimelineTests(TestCase):
             self.assertEqual(classify('parity', games, i), 'E' if n % 2 == 0 else 'O')
             self.assertEqual(classify('row', games, i), f'R{n // 7 + 1}')
             self.assertEqual(classify('column', games, i), f'C{n % 7 + 1}')
-            self.assertEqual(classify('extreme', games, i), 'J' if n < 6 or n > 21 else 'M')
+            self.assertEqual(classify('extreme', games, i), 'J' if n < 7 or n > 20 else 'M')
             self.assertEqual(classify('border', games, i), 'O' if (n < 7 or n >= 21 or n % 7 == 0 or n % 7 == 6) else 'I')
         data = build_timeline('lucky28')
         self.assertEqual(self.track(data, 'combo')['timeline'][0]['letter'], 'BO')

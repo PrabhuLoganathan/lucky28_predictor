@@ -147,3 +147,33 @@ class TipAlertTests(TestCase):
         solid = render_card(payload)
         payload['global_timeline']['games'][0]['gap_before'] = True
         self.assertNotEqual(solid, render_card(payload))
+
+    def test_dedicated_channel_routes_only_tips_and_preserves_conditions(self):
+        self.rules[0].threshold = 5
+        self.rules[0].save()
+        other = AlertRule.objects.create(key='other', title='Other', series='number',
+            mode='every_game')
+        call_command('sync_tip_alerts', chat_id='@lucky28_tips', verbosity=0)
+        destination = AlertDestination.objects.get(chat_id='@lucky28_tips')
+        self.assertEqual(destination.name, 'Lucky28 Tip Alerts')
+        self.assertEqual(destination.routing_type, 'direct')
+        self.assertTrue(destination.enabled)
+        self.assertFalse(destination.send_results)
+        self.assertFalse(destination.send_health)
+        for rule in self.rules:
+            rule.refresh_from_db()
+            self.assertFalse(rule.send_to_levels)
+            self.assertEqual(list(rule.destinations.all()), [destination])
+        self.assertEqual(self.rules[0].threshold, 5)
+        other.refresh_from_db()
+        self.assertTrue(other.send_to_levels)
+        self.assertFalse(other.destinations.exists())
+
+    def test_dedicated_channel_rejects_existing_chat_without_changes(self):
+        from django.core.management.base import CommandError
+        destination = AlertDestination.objects.create(name='Existing', chat_id='123')
+        with self.assertRaises(CommandError):
+            call_command('sync_tip_alerts', chat_id='123', verbosity=0)
+        destination.refresh_from_db()
+        self.assertEqual(destination.routing_type, 'level')
+        self.assertTrue(all(rule.send_to_levels for rule in AlertRule.objects.all()))

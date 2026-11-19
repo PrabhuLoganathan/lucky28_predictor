@@ -52,7 +52,7 @@ def reconcile(stream, states, history, previous_round, saved_games):
         path = reverse('game_detail', args=[game.game_no])
         base = getattr(settings, 'ALERT_PUBLIC_BASE_URL', '').rstrip('/')
         url = urlsplit(base)
-        snapshot = dict(stream=stream.key, group_id=group.id, group_name=f'{group.id} · {group.name}',
+        snapshot = dict(stream=stream.key, group_id=group.id, group_name=group.name,
             color=group.name, numbers=list(group.numbers), mode='absence', change_type='ended',
             count=count, absence=count, lower_bound=False, threshold=state.ending_threshold,
             last_round=history[start].game_no, last_number=history[start].winning_number,

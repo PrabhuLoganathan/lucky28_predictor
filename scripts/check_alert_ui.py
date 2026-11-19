@@ -92,7 +92,7 @@ const { chromium, expect } = require('./chamet_logger_standalone/node_modules/@p
     await expect(page.getByLabel('Send a follow-up when an alerted absence or streak ends', {exact:true})).toBeChecked();
     await expect(page.locator('.streak-enabled:checked')).toHaveCount(19);
     await expect(page.getByLabel('Column 7 streak threshold', {exact:true})).toHaveValue('3');
-    await expect(page.getByLabel('Extreme edges · 0–5, 22–27 absence threshold', {exact:true})).toHaveValue('3');
+    await expect(page.getByLabel('Extreme edges · 0–6, 21–27 absence threshold', {exact:true})).toHaveValue('3');
     await expect(page.getByLabel('Inner board center streak threshold', {exact:true})).toHaveValue('3');
     await page.getByLabel('Column 7 streak threshold', {exact:true}).fill('99');
     await page.getByRole('link', {name:'Cancel', exact:true}).click();

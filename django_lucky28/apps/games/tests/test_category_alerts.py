@@ -118,6 +118,65 @@ class CategoryAlertTests(TestCase):
         synchronize()
         self.assertEqual(CategoryAlertEvent.objects.count(), 4)
 
+    def test_border_channel_absence_uses_io_runs_at_configured_thresholds(self):
+        self.configure(pairs=(('border', 'absence'),), threshold=12)
+        inner = [8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 8, 9]
+        self.sequence([0] + inner[:-1])
+        self.assertEqual(self.rule('border').count, 11)
+        self.assertFalse(CategoryAlertEvent.objects.exists())
+        self.result(112, inner[-1])
+        event = CategoryAlertEvent.objects.get()
+        self.assertEqual(event.rule.group_id, 'border')
+        self.assertEqual(event.snapshot['count'], 12)
+        self.assertEqual(AlertDelivery.objects.filter(kind='category').count(), 1)
+        self.result(113, 10)
+        self.assertEqual(CategoryAlertEvent.objects.count(), 1)
+        self.result(114, 13)
+        event.refresh_from_db()
+        self.assertIsNotNone(event.resolved_at)
+        self.assertEqual(self.rule('border').count, 0)
+
+        self.configure(pairs=(('center', 'absence'),), threshold=8)
+        self.sequence([8, 0, 7, 13, 14, 20, 21, 27], start=115)
+        self.assertFalse(CategoryAlertEvent.objects.filter(rule__group_id='center').exists())
+        self.result(123, 6)
+        event = CategoryAlertEvent.objects.get(rule__group_id='center')
+        self.assertEqual(event.snapshot['count'], 8)
+        self.result(124, 19)
+        event.refresh_from_db()
+        self.assertIsNotNone(event.resolved_at)
+        self.assertEqual(self.rule('center').count, 0)
+
+    def test_border_conditions_are_explained_on_status_and_settings_pages(self):
+        self.configure(pairs=(('border', 'absence'),), threshold=12)
+        local = {'REMOTE_ADDR': '127.0.0.1', 'HTTP_HOST': 'localhost'}
+        response = self.client.get('/alerts/categories/', **local)
+        self.assertContains(response, 'Trigger: 12 consecutive I results')
+        for url in ('/alerts/categories/', '/alerts/categories/settings/'):
+            self.assertContains(self.client.get(url, **local), 'O = Outer, I = Inner.')
+
+    def test_extreme_edges_include_six_and_twenty_one_and_reset_absence(self):
+        self.configure(pairs=(('edges', 'absence'),), threshold=3)
+        self.sequence([0, 7, 10, 20])
+        first = CategoryAlertEvent.objects.get(rule__group_id='edges')
+        self.assertIn(6, first.snapshot['numbers'])
+        self.assertIn(21, first.snapshot['numbers'])
+        self.result(104, 6)
+        first.refresh_from_db()
+        self.assertIsNotNone(first.resolved_at)
+        self.assertEqual(self.rule('edges').count, 0)
+        self.sequence([7, 10, 20], start=105)
+        second = CategoryAlertEvent.objects.filter(rule__group_id='edges').latest('pk')
+        self.assertNotEqual(first.pk, second.pk)
+        self.result(108, 21)
+        second.refresh_from_db()
+        self.assertIsNotNone(second.resolved_at)
+        self.assertEqual(self.rule('edges').count, 0)
+        for n in (6, 21):
+            groups = {group.id for group in CATEGORIES_BY_NUMBER[n]}
+            self.assertIn('edges', groups)
+            self.assertNotIn('middle', groups)
+
     def test_column_and_combination_streaks_and_independent_modes(self):
         self.configure(pairs=(('C01', 'streak'), ('SE', 'streak'), ('BO', 'absence')))
         self.sequence([0, 7, 14])
@@ -483,3 +542,36 @@ class CategoryAlertTests(TestCase):
         data['notify_changes'] = 'on'
         self.client.post('/alerts/categories/settings/', data, **local)
         self.assertTrue(CategoryAlertSettings.objects.get().notify_changes)
+
+    def test_family_channel_setup_preserves_conditions_and_isolates_routing(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        from games.services.alert_routing import routing_allowed
+        self.configure(pairs=(('SE', 'absence'),), threshold=4)
+        before = list(CategoryAlertRule.objects.values_list('pk', 'enabled', 'threshold'))
+        call_command('configure_category_channel', 'combinations', chat_id='-1001234567', verbosity=0)
+        self.assertEqual(before, list(CategoryAlertRule.objects.values_list('pk', 'enabled', 'threshold')))
+        channel = AlertDestination.objects.get(chat_id='-1001234567')
+        self.assertEqual(channel.routing_type, 'direct')
+        self.assertFalse(channel.send_health)
+        self.assertFalse(channel.send_results)
+        self.sequence([18, 18, 18, 18])
+        delivery = AlertDelivery.objects.get(destination=channel, kind='category')
+        self.assertEqual(delivery.payload['group_id'], 'SE')
+        self.assertTrue(routing_allowed(delivery))
+        self.assertFalse(AlertDelivery.objects.filter(destination=self.destination, kind='category',
+            payload__group_id='SE').exists())
+        unrelated = self.rule('R03', 'absence')
+        self.assertTrue(unrelated.send_to_levels)
+        self.assertFalse(unrelated.destinations.exists())
+        delivery.status = 'sent'
+        delivery.save(update_fields=['status'])
+        self.result(104, 0)
+        ending = AlertDelivery.objects.get(destination=channel, kind='category_end')
+        self.assertTrue(routing_allowed(ending))
+        rule = self.rule('SE', 'absence')
+        rule.destinations.clear()
+        self.assertFalse(routing_allowed(delivery))
+        self.assertFalse(routing_allowed(ending))
+        with self.assertRaises(CommandError):
+            call_command('configure_category_channel', 'extremes', chat_id='-1001234567', verbosity=0)

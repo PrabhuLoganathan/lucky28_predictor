@@ -61,7 +61,7 @@ class CardTimelineTests(TestCase):
 class CardDesignTests(SimpleTestCase):
     def test_group_families_have_matching_clear_card_and_caption_identities(self):
         samples = [('R03', 'ROW', 'R3', 'row'), ('C02', 'COLUMN', 'C2', 'column'),
-                   ('SE', 'COMBINATION', 'SE', 'combination'), ('G04', 'COLOR', 'G04', 'color_group')]
+                   ('SE', 'COMBINATION', 'SE', 'combination'), ('G04', 'COLOR', 'Blue', 'color_group')]
         accents = set()
         for group_id, family, badge, icon in samples:
             with self.subTest(group_id=group_id):
@@ -75,6 +75,8 @@ class CardDesignTests(SimpleTestCase):
                 self.assertEqual(model['identity']['badge'], badge)
                 self.assertEqual(model['identity']['icon'], icon)
                 self.assertIn(f'<b>{family} ABSENCE ENDED</b>', format_message(payload, kind))
+                if family == 'COLOR':
+                    self.assertIn('Blue [6]', format_message(payload, kind))
                 self.assertIn('Returned: 6', model['return_detail'])
                 accents.add(model['accent'])
                 payload['mode'] = 'streak'
@@ -100,7 +102,9 @@ class CardDesignTests(SimpleTestCase):
             self.assertEqual((focus['key'], focus['letters']), (key, letters))
             self.assertEqual(focus['legend'], TRACKS[key][1])
             from games.services.alert_presentation import snapshot_timeline_lines
-            self.assertIn(' · '.join(letters), snapshot_timeline_lines(payload, 'category')[0])
+            labels = ['Magenta', 'Cyan / Teal', 'Grey'] if key == 'color' else letters
+            self.assertEqual(focus['labels'], labels)
+            self.assertIn(' · '.join(labels), snapshot_timeline_lines(payload, 'category')[0])
         for series, letters in [('number', ['4', '9', '14']), ('size', ['S', 'S', 'B']),
                                 ('parity', ['E', 'O', 'E'])]:
             focus = card_model(dict(matches=[dict(group=series)],

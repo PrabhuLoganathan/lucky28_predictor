@@ -14,6 +14,7 @@ from django.utils import timezone
 from games.category_config import CATEGORY_BY_ID, CATEGORIES_BY_NUMBER
 from games.models import AlertDelivery, CategoryAlertEvent
 from .alerts import queue_delivery
+from .alert_routing import owner_permits
 from .group_absence import display_time
 
 ENDING_INVALID = 'Ending evidence changed or cannot be verified.'
@@ -114,7 +115,7 @@ def queue_endings(config):
         # each cycle, so that race cannot lose the follow-up.
         for original in originals:
             destination = original.destination
-            if (not destination.enabled or destination.routing_type != 'level' or destination.plan_rank < 1
+            if (not destination.enabled or not owner_permits(event.rule, destination)
                     or (destination.expires_at and destination.expires_at <= now)
                     or str(original.original_chat_id) != destination.chat_id):
                 continue

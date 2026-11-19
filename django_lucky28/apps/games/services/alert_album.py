@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from PIL import Image, ImageDraw
 
 from games.group_config import GROUP_BY_NAME, GROUP_BY_NUMBER
-from .alert_card import BG, PANEL, WHITE, MUTED, TIP_GOLD, card_model, load_font, sticker
+from .alert_card import BG, PANEL, WHITE, MUTED, TIP_GOLD, card_legend_label, card_model, load_font, sticker
 from .alert_presentation import card_lines, match_labels
 from .card_gaps import gap_label
 from .timeline import TRACKS
@@ -50,7 +50,8 @@ def summary(payload, kind, model=None):
     if primary.get('group') == 'color' and len(primary.get('values', [])) == 1:
         color_name = primary['values'][0]
     if color_name and color_name in GROUP_BY_NAME:
-        numbers = list(GROUP_BY_NAME[color_name].numbers)
+        group = GROUP_BY_NAME[color_name]
+        color_name, numbers = group.name, list(group.numbers)
         heading = f'{color_name.upper()} GROUP — {"ABSENCE ENDED" if key == "ended" else key.replace("_", " ").upper()}'
     if key == 'absence' and count is not None:
         detail = f'Absent for: {count_text} completed {rounds}'
@@ -92,7 +93,9 @@ def format_album_caption(payload, kind):
         color = payload.get('color', '')
     elif primary.get('group') == 'color':
         color = (primary.get('values') or [''])[0]
-    symbol = {'Yellow': '🟡', 'Orange': '🟠', 'Red': '🔴', 'Blue': '🔵', 'Green': '🟢',
+    if color in GROUP_BY_NAME:
+        color = GROUP_BY_NAME[color].name
+    symbol = {'Orange': '🟠', 'Red': '🔴', 'Blue': '🔵', 'Green': '🟢',
               'Pink': '🟣', 'Magenta': '🟣', 'Cyan': '🔵', 'Cyan / Teal': '🔵', 'Grey': '⚪'}.get(color, '')
     lines = [f'{symbol + " " if symbol else ""}<b>{escaped_limit(info["heading"], 200)}</b>', '', f'<b>{escaped_limit(info["detail"], 300)}</b>']
     if info['numbers']:
@@ -268,7 +271,9 @@ def timeline_page(payload, kind, model, check):
             outline=TIP_GOLD if is_tip else color,width=3 if is_tip else 1)
         if i == 0:
             page.draw.rounded_rectangle((x-4,y-4,x+93,y+88),radius=14,outline=WHITE,width=2)
-        page.text(x+44,y+9,letter,26,bold=True,anchor='ma')
+        label = focus['labels'][i]
+        size = next(size for size in (26, 20, 16, 14, 12) if page.font(size, True).getlength(label) <= 76)
+        page.text(x+44,y+9,label,size,bold=True,anchor='ma')
         if is_tip:
             page.text(x+77,y+1,'*',19,bold=True,color=TIP_GOLD,anchor='ma')
         label = f'#{game["number"]}' if focus['key'] != 'number' else f'{i+1:03d}'
@@ -285,7 +290,7 @@ def timeline_page(payload, kind, model, check):
     if not games:
         page.fit('No completed timeline was saved with this alert.',(64,450,1536,900),42,color=MUTED)
     shown = TRACKS['color'][1] if focus['key'] == 'number' else focus['legend']
-    legend_text = ' · '.join(f'{s["letter"]} {s["label"].split(" · ")[0]}' for s in shown)
+    legend_text = ' · '.join(card_legend_label(s, focus['key']) for s in shown)
     page.fit(legend_text,(64,1338,1536,1408),22,minimum=18,color=MUTED)
     page.text(64, 1420, 'N = New · R = Repeated vs previous 10 rounds · ? = insufficient or unsaved evidence',21,color=MUTED)
     page.text(64, 1452, 'White outline = newest · gap = history gap · Gold outline + * = TIP game',21,color=MUTED)

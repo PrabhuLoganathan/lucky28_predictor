@@ -14,6 +14,7 @@
 <div class="alert-toolbar"><label for="all-streak">Streak threshold for all groups</label><input id="all-streak" class="form-control w-auto" inputmode="numeric" maxlength="7"><button type="button" class="btn btn-outline-secondary" data-apply="streak">Populate streak thresholds</button></div>
 <div class="alert-toolbar mt-3"><button type="button" class="btn btn-outline-secondary" data-toggle-mode="absence" data-enable="1">Enable all absence</button><button type="button" class="btn btn-outline-secondary" data-toggle-mode="absence" data-enable="0">Disable all absence</button><button type="button" class="btn btn-outline-secondary" data-toggle-mode="streak" data-enable="1">Enable all streaks</button><button type="button" class="btn btn-outline-secondary" data-toggle-mode="streak" data-enable="0">Disable all streaks</button></div>
 </div>
+{% include 'games/alerts/border_help.html' %}
 {% for section in sections %}<h3 class="h5 mt-4">{{ section.name }}</h3>
 <div class="table-responsive"><table class="table" style="min-width:650px"><thead><tr><th>Group / member numbers</th><th>Absence enabled</th><th>Missed rounds</th><th>Streak enabled</th><th>Consecutive hits</th></tr></thead><tbody>
 {% for row in section.rows %}<tr><th>{{ row.group.name }}<br><small class="fw-normal">[{{ row.group.numbers|join:', ' }}]</small></th>

@@ -39,11 +39,11 @@ _COLOR_LABEL = re.compile(
 def label_color_groups(text):
     """Add member numbers, including legacy color names, without double labels."""
     def label(match):
+        group = GROUP_BY_NAME[match.group(1)]
         if match.group('numbers'):
-            return match.group()
-        name = match.group(1)
-        numbers = ', '.join(map(str, GROUP_BY_NAME[name].numbers))
-        return f'{name} [{numbers}]'
+            return group.name + match.group('numbers')
+        numbers = ', '.join(map(str, group.numbers))
+        return f'{group.name} [{numbers}]'
     return _COLOR_LABEL.sub(label, text)
 
 

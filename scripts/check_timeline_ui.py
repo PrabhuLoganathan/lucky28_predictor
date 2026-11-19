@@ -134,8 +134,8 @@ const { execFileSync } = require('child_process');
     const addedViews=[
       ['Board rows',recentNumbers.map(n=>'R'+(Math.floor(n/7)+1)),4],
       ['Board columns',recentNumbers.map(n=>'C'+(n%7+1)),7],
-      ['Colors',['G5','G7','G3','G7','G5','G5','G7','G5','G7','G6'],7],
-      ['Extreme numbers',recentNumbers.map(n=>n<=5||n>=22?'J':'M'),2],
+      ['Colors',['Cyan / Teal','Grey','Magenta','Grey','Cyan / Teal','Cyan / Teal','Grey','Cyan / Teal','Grey','Green'],7],
+      ['Extreme numbers',recentNumbers.map(n=>n<=6||n>=21?'J':'M'),2],
       ['Board border',recentNumbers.map(n=>(n<7||n>=21||n%7===0||n%7===6)?'O':'I'),2]
     ];
     for(const [name,labels,legendCount] of addedViews){
@@ -154,7 +154,7 @@ const { execFileSync } = require('child_process');
     await page.locator('[data-round="P7"]').focus();await page.locator('#tl-recent-details').click();
     await expect(page.locator('#tl-recent-info')).toContainText('Number 4 · Small (S) · Even (E) · SE · #P7');
     await expect(page.locator('.tl-recent-round-link')).toHaveAttribute('href',/P7/);
-    await expect(page.locator('#tl-recent-info')).toContainText('Row 1 · Column 5 · Magenta · Edges (0–5, 22–27) · Outer edges (18)');
+    await expect(page.locator('#tl-recent-info')).toContainText('Row 1 · Column 5 · Magenta · Edges (0–6, 21–27) · Outer edges (18)');
     await page.locator('#tl-recent-details').click();await expect(page.locator('#tl-recent-info')).toBeHidden();
     // No duplicate statistics or explanation sits between the board and Newest.
     expect(await page.locator('.tl-board-scroller').evaluate(n=>n.nextElementSibling.id)).toBe('tl-recent-results');

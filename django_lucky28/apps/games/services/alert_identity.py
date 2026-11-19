@@ -22,8 +22,8 @@ def group_identity(payload):
                     symbol='🔷', title=category.name)
     color = GROUP_BY_ID.get(group_id)
     if color:
-        return dict(family='COLOR', accent=color.color, icon='color_group', badge=group_id,
-                    symbol='🎨', title=f'{group_id} · {color.name}')
+        return dict(family='COLOR', accent=color.color, icon='color_group', badge=color.name,
+                    symbol='🎨', title=color.name)
     return None
 
 

@@ -1,6 +1,6 @@
 """Render only frozen payloads; no live database reads during delivery."""
 from html import escape
-from games.group_config import label_color_groups
+from games.group_config import GROUP_BY_ID, label_color_groups
 from .alert_identity import group_heading
 
 
@@ -48,7 +48,7 @@ def snapshot_timeline_lines(payload, kind):
         return []
     focus = focus_track(payload, kind, dict(games=games[:15]))
     sequence = ' · '.join(letter + ('★' if game.get('tip', {}).get('status') == 'TIP' else '')
-                          for letter, game in zip(focus['letters'], games[:15]))
+                          for letter, game in zip(focus['labels'], games[:15]))
     lines = [f'🧭 {focus["title"]} snapshot (newest {min(len(games), 15)}): {sequence}']
     if any('tip' in game for game in games):
         lines.append('★ Gold border/star = TIP game; unmarked results may have no tip or unknown totals.')
@@ -162,8 +162,10 @@ def format_category_ending(payload):
     detail = (f'Absence ended after {count} missed rounds. Result {payload["ended_number"]} returned to this group. Absence reset to 0 on this round.'
               if payload['mode'] == 'absence' else
               f'Streak ended after {count} consecutive hits. Result {payload["ended_number"]} is outside this group.')
+    color = GROUP_BY_ID.get(payload.get('group_id'))
+    name = color.name if color else payload['group_name']
     lines = [f'<b>{group_heading(payload, payload["mode"], ended=True)}</b>',
-             escape(f'{payload["group_name"]} {payload["numbers"]}'), escape(detail),
+             escape(f'{name} {payload["numbers"]}'), escape(detail),
              escape(f'Ending round: {payload["evaluated_round"]}.'),
              escape(f'Minimum missed rounds before return: {payload["threshold"]}.') if payload['mode'] == 'absence' else '',
              escape(f'Result time: {payload["ended_at"]}'), escape(f'Stream: {payload["stream"]}')]
@@ -176,7 +178,7 @@ def format_category_ending(payload):
 
 
 def format_group_message(payload):
-    group = f'{payload["group_id"]} · {payload["color"]} group {payload["numbers"]}'
+    group = f'{payload["color"]} group {payload["numbers"]}'
     count = f'{"at least " if payload["lower_bound"] else ""}{payload["absence"]}'
     lines = [f'<b>{group_heading(payload)}</b>', escape(group),
              escape(f'Absent for {count} observed completed rounds. Threshold: {payload["threshold"]}.'),

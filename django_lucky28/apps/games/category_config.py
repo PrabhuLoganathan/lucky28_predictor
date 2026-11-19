@@ -23,8 +23,8 @@ COMBO_GROUPS = (
     NumberCategory('SO', 'SO — Small Odd', 'SE / BE / BO / SO', tuple(range(1, 14, 2))),
 )
 EXTREME_GROUPS = (
-    NumberCategory('edges', 'Extreme edges · 0–5, 22–27', 'Extreme numbers', (*range(6), *range(22, 28))),
-    NumberCategory('middle', 'Middle · 6–21', 'Extreme numbers', tuple(range(6, 22))),
+    NumberCategory('edges', 'Extreme edges · 0–6, 21–27', 'Extreme numbers', (*range(7), *range(21, 28))),
+    NumberCategory('middle', 'Middle · 7–20', 'Extreme numbers', tuple(range(7, 21))),
 )
 BORDER_GROUPS = (
     NumberCategory('border', 'Outer board border', 'Board border', tuple(n for n in range(28)

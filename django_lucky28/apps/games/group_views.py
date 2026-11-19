@@ -48,6 +48,8 @@ def configuration(request):
     changes = list(GroupAbsenceChange.objects.filter(stream=stream).order_by('-pk')[:50])
     destination_names = dict(AlertDestination.objects.values_list('pk', 'name'))
     for change in changes:
+        group = GROUP_BY_ID.get(change.group_id)
+        change.group_label = group.name if group else change.group_id
         for value in (change.old_value, change.new_value):
             legacy_target = value.get('direct_destination_id')
             ids = value.get('destination_ids', [legacy_target] if legacy_target else [])

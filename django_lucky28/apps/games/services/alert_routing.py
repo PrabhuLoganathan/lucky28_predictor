@@ -1,5 +1,5 @@
 """Recheck recipient choices before sending queued alerts."""
-from games.models import AlertRule, GroupAbsenceState
+from games.models import AlertRule, GroupAbsenceState, CategoryAlertRule, WindowAlertState
 
 
 def permits_route(destination, send_to_levels, destination_ids=(), minimum=1):
@@ -16,6 +16,16 @@ def routing_allowed(delivery):
     destination, payload = delivery.destination, delivery.payload
     if delivery.kind == 'test':
         return True  # Explicit operator action.
+    if delivery.kind == 'window':
+        if destination.routing_type == 'level':
+            return True
+        return (payload.get('kind') == 'drought' and WindowAlertState.objects.filter(
+            stream_id=payload.get('stream'), drought_destinations=destination).exists())
+    if delivery.kind in ('category', 'category_end'):
+        rule = CategoryAlertRule.objects.prefetch_related('destinations').filter(
+            settings_id=payload.get('stream'), group_id=payload.get('group_id'),
+            mode=payload.get('mode')).first()
+        return bool(rule and owner_permits(rule, destination))
     if delivery.kind in ('group', 'group_end'):
         state = GroupAbsenceState.objects.prefetch_related('destinations').filter(stream_id=payload.get('stream'),
             group_id=payload.get('group_id')).first()

@@ -156,7 +156,10 @@ def synchronize(key='lucky28', evaluate_current=True):
         by_id = {rule.pk: rule for rule in rules}
         for event in CategoryAlertEvent.objects.filter(rule__settings=config, resolved_at__isnull=True):
             if eligible(config, by_id[event.rule_id]):
-                for destination in eligible_destinations(now):
+                rule = by_id[event.rule_id]
+                for destination in eligible_destinations(now,
+                        destination_ids=rule.destinations.values_list('pk', flat=True),
+                        send_to_levels=rule.send_to_levels):
                     queue_delivery(f'category:{event.pk}:{destination.pk}', destination, 'category',
                                    dict(event.snapshot, event_id=event.pk))
         queue_endings(config)

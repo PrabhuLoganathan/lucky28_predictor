@@ -10,7 +10,8 @@ from .services.alert_settings import get_config
 
 VALUES = {'size': ['Big', 'Small'], 'parity': ['Odd', 'Even'],
           'color': ['Red', 'Yellow', 'Pink', 'Blue', 'Cyan', 'Green', 'Grey'],
-          'number': [str(n) for n in range(28)], 'tip': ['TIP', 'NO_TIP']}
+          'number': [str(n) for n in range(28)], 'tip': ['TIP', 'NO_TIP'],
+          'new_repeat': ['New', 'Repeated']}
 RANKS = [(n, f'Level {n}' + (' (low)' if n == 1 else ' (high)' if n == 5 else '')) for n in range(1, 6)]
 
 
@@ -52,7 +53,8 @@ class AlertRuleForm(StyledForm, forms.ModelForm):
         fields = ['title', 'series', 'mode', 'values', 'threshold', 'window', 'breaker_value', 'recipients', 'min_plan_rank', 'session_only', 'enabled']
         labels = {'title': 'Rule name', 'series': 'Watch', 'mode': 'Pattern', 'threshold': 'Trigger count',
                   'window': 'Look back over this many rounds', 'session_only': 'Use only this server session', 'enabled': 'Rule enabled'}
-        help_texts = {'threshold': 'Minimum count for most patterns; maximum count for low density.',
+        help_texts = {'mode': 'Every new round sends on every round opening without checking a pattern. Trigger count and lookback do not reduce its frequency. Disable it for condition-only alerts.',
+                      'threshold': 'Minimum count for most patterns; maximum count for low density. Ignored by Every new round.',
                       'window': 'Used for high or low density patterns.',
                       'session_only': 'Resets the rule’s history when the server restarts.'}
 
@@ -66,10 +68,10 @@ class AlertRuleForm(StyledForm, forms.ModelForm):
         self.fields['values'].widget.attrs['size'] = min(7, max(2, len(choices)))
         self.fields['breaker_value'].choices = [('', 'Choose a value')] + choices
         self.fields['series'].initial = series
-        self.fields['series'].choices = [('size', 'Big / Small'), ('parity', 'Odd / Even'), ('color', 'Color'), ('number', 'Number'), ('tip', 'Tip settlement')]
+        self.fields['series'].choices = [('size', 'Big / Small'), ('parity', 'Odd / Even'), ('color', 'Color'), ('number', 'Number'), ('tip', 'Tip settlement'), ('new_repeat', 'New / Repeated')]
         self.fields['mode'].choices = [('streak', 'Consecutive results'), ('absence', 'Drought / absence'),
             ('density', 'High frequency in a window'), ('density_low', 'Low frequency in a window'),
-            ('breaker', 'Streak ended'), ('alternating', 'Alternating results'), ('every_game', 'Every new round')]
+            ('breaker', 'Streak ended'), ('alternating', 'Alternating results'), ('every_game', 'Every new round (unconditional broadcast)')]
         self.fields['window'].required = False
         self.fields['threshold'].required = False
         self.style()

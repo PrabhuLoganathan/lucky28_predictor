@@ -33,8 +33,9 @@ class GroupHistoryTests(TestCase):
         self.assertEqual(groups['BO']['current_gap'], 0)
         self.assertEqual(groups['E']['current_gap'], 3)
         self.assertEqual(groups['SE']['current_gap'], 4)
-        self.assertEqual(groups['edges']['current_gap'], 2)
-        self.assertEqual(groups['middle']['current_gap'], 0)
+        self.assertEqual(groups['edges']['current_gap'], 0)
+        self.assertEqual(groups['edges']['total_hits'], 4)  # 0, 6, 3, 21
+        self.assertEqual(groups['middle']['current_gap'], 1)
         for family in ('Rows', 'Columns', 'Size', 'Parity', 'Combos', 'Colors', 'Range', 'Border'):
             self.assertEqual(sum(g['recent_hits'] for g in groups.values() if g['family'] == family), 6)
 
