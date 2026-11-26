@@ -838,3 +838,15 @@ For all four rows in one dedicated **Lucky28 Row Alerts** channel, use:
 This preserves the saved thresholds and enabled states for R01–R04, routes their
 absence/streak alerts exclusively to the new channel, and leaves other category
 families unchanged. Add the existing bot as an administrator with posting permission.
+
+### Left / Right number alerts
+
+Left: 0, 1, 2, 3, 7, 8, 9, 10, 14, 15, 16, 21, 22, 23. Right: 4, 5, 6, 11, 12, 13, 17, 18, 19, 20, 24, 25, 26, 27. The palette has buttons to select either side only, and the timeline and recent-result view have a Left / Right track.
+
+Under Alerts → Rows & categories → settings, configure the Left / Right absence and consecutive-streak rules independently. New rules start disabled with a suggested threshold of 6 and do not route to subscription levels. To set up a dedicated Telegram channel, add the bot as a channel administrator and run:
+
+```sh
+.venv/bin/python django_lucky28/manage.py configure_category_channel sides --chat-id=-100YOUR_CHANNEL_ID
+```
+
+The command routes all four side rules only to that new destination, preserving their enabled states and thresholds. Enable the desired rules and global category delivery in settings. Alerts fire once per continuous period; history gaps can pause evaluation.

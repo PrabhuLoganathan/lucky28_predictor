@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from games.group_config import COLOR_GROUPS, GROUP_BY_NUMBER
-from games.category_config import ROW_GROUPS, COLUMN_GROUPS, COMBO_GROUPS
+from games.category_config import ROW_GROUPS, COLUMN_GROUPS, COMBO_GROUPS, SIDE_GROUPS
 from games.models import (AlertOccurrence, GroupAbsenceEvent, CategoryAlertEvent,
                           WindowAlertEvent, GroupAbsenceStream, GameRound, SignalLog)
 from .group_absence import stream_games, sequence_id
@@ -33,6 +33,7 @@ TRACKS = {
     'column': ('Board columns', states(*[(f'C{i+1}', f'{g.name} · {", ".join(map(str, g.numbers))}', PALETTE[i]) for i, g in enumerate(COLUMN_GROUPS)])),
     'extreme': ('Extreme numbers', states(('J', 'Edges · 0–6, 21–27', '#fbbf24'), ('M', 'Middle · 7–20', '#94a3b8'))),
     'border': ('Board border', states(('O', 'Outer edges · 18 numbers', '#f43f5e'), ('I', 'Inner center · 10 numbers', '#06b6d4'))),
+    'side': ('Left / Right', states(*[(letter, f'{group.name} · {", ".join(map(str, group.numbers))}', color) for letter, group, color in zip(('L', 'R'), SIDE_GROUPS, ('#8b5cf6', '#f97316'))])),
     'repeat': ('Repeat in previous 2', states(('R', 'Same number as either previous 2 games', '#34d399'), ('N', 'Different from both previous games', '#38bdf8'), UNKNOWN)),
     'window': ('10-game repeat / drought', states(('R', 'A number repeats in this 10-game window', '#34d399'), ('D', 'All 10 numbers are different', '#fbbf24'), UNKNOWN)),
     'alerts': ('Recorded alerts', states(('A', 'Recorded alert or condition ended', '#f472b6'), ('·', 'No recorded alert', '#64748b'))),
@@ -112,6 +113,7 @@ def classify(key, games, index):
     if key == 'row': return f'R{n // 7 + 1}'
     if key == 'column': return f'C{n % 7 + 1}'
     if key == 'extreme': return 'J' if n <= 6 or n >= 21 else 'M'
+    if key == 'side': return 'L' if n in SIDE_GROUPS[0].numbers else 'R'
     if key == 'border': return 'O' if (n < 7 or n >= 21 or n % 7 == 0 or n % 7 == 6) else 'I'
     needed = 3 if key == 'repeat' else 10
     window = games[index:index + needed]

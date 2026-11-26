@@ -25,10 +25,10 @@ class CategoryMappingTests(SimpleTestCase):
     def test_board_partitions_and_boundaries(self):
         for _, groups in CATEGORY_FAMILIES:
             self.assertEqual(sorted(n for group in groups for n in group.numbers), list(range(28)))
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[18]], ['R03', 'C05', 'BE', 'middle', 'center'])
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[0]], ['R01', 'C01', 'SE', 'edges', 'border'])
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[13]], ['R02', 'C07', 'SO', 'middle', 'border'])
-        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[27]], ['R04', 'C07', 'BO', 'edges', 'border'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[18]], ['R03', 'C05', 'BE', 'middle', 'center', 'right'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[0]], ['R01', 'C01', 'SE', 'edges', 'border', 'left'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[13]], ['R02', 'C07', 'SO', 'middle', 'border', 'right'])
+        self.assertEqual([g.id for g in CATEGORIES_BY_NUMBER[27]], ['R04', 'C07', 'BO', 'edges', 'border', 'right'])
 
 
 @override_settings(ALERT_TELEGRAM_ENABLED=True, ALERT_TELEGRAM_BOT_TOKEN='fake-test-token', LOGGER_API_TOKEN='test')
@@ -66,8 +66,22 @@ class CategoryAlertTests(TestCase):
     def test_new_rules_unconfigured_until_explicit_setup(self):
         config, rules = synchronize()
         self.assertFalse(config.enabled)
-        self.assertEqual(len(rules), 38)
-        self.assertTrue(all(not r.enabled and r.threshold is None for r in rules))
+        self.assertEqual(len(rules), 42)
+        self.assertTrue(all(not r.enabled for r in rules))
+        self.assertTrue(all(r.threshold == 6 and not r.send_to_levels for r in rules if r.group_id in ('left', 'right')))
+        self.assertTrue(all(r.threshold is None for r in rules if r.group_id not in ('left', 'right')))
+
+    def test_side_six_round_absence_and_streak(self):
+        self.configure(pairs=(('left', 'absence'), ('right', 'streak')), threshold=6)
+        self.sequence([0, 4, 5, 6, 11, 12])
+        self.assertFalse(CategoryAlertEvent.objects.exists())
+        self.result(106, 13)
+        self.assertEqual(self.rule('left', 'absence').count, 6)
+        self.assertEqual(self.rule('right', 'streak').count, 6)
+        self.assertEqual(set(CategoryAlertEvent.objects.values_list('rule__group_id', 'rule__mode')),
+                         {('left', 'absence'), ('right', 'streak')})
+        self.result(107, 1)
+        self.assertEqual(CategoryAlertEvent.objects.filter(resolved_at__isnull=False).count(), 2)
 
     def test_absence_three_and_reset_then_new_period(self):
         self.configure(pairs=(('R03', 'absence'),))
@@ -542,6 +556,18 @@ class CategoryAlertTests(TestCase):
         data['notify_changes'] = 'on'
         self.client.post('/alerts/categories/settings/', data, **local)
         self.assertTrue(CategoryAlertSettings.objects.get().notify_changes)
+
+    def test_side_channel_routes_only_side_rules(self):
+        from django.core.management import call_command
+        self.configure(pairs=(('left', 'absence'),), threshold=6)
+        call_command('configure_category_channel', 'sides', chat_id='-1007654321', verbosity=0)
+        channel = AlertDestination.objects.get(chat_id='-1007654321')
+        self.sequence([0, 4, 5, 6, 11, 12, 13])
+        self.assertTrue(AlertDelivery.objects.filter(destination=channel, kind='category', payload__group_id='left').exists())
+        self.assertFalse(AlertDelivery.objects.filter(destination=self.destination, kind='category', payload__group_id='left').exists())
+        for rule in CategoryAlertRule.objects.filter(group_id__in=('left', 'right')):
+            self.assertFalse(rule.send_to_levels)
+            self.assertEqual(list(rule.destinations.all()), [channel])
 
     def test_family_channel_setup_preserves_conditions_and_isolates_routing(self):
         from django.core.management import call_command

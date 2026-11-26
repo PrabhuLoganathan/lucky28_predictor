@@ -13,6 +13,8 @@
   const write = (key, value) => {try {localStorage.setItem(key, JSON.stringify(value));} catch { /* Private mode */ }};
   let enabled = read('lucky28.timeline.tracks');
   if (!Array.isArray(enabled) || !enabled.every(k => typeof k === 'string')) enabled = null;
+  // Keep unsupported saved tracks so they can return after the server is updated.
+  let unavailableTracks = [];
   let collapsed = read('lucky28.timeline.collapsed') || [];
   if (!Array.isArray(collapsed)) collapsed = [];
   let data, busy = false, pending = false, paused = false, page = 0, selected = null, signature = '';
@@ -38,6 +40,8 @@
   for(let i=0;i<7;i++) memberships.set(`C0${i+1}`,universe.filter(n=>n%7===i));
   memberships.set('border',universe.filter(n=>Math.floor(n/7)===0||Math.floor(n/7)===3||n%7===0||n%7===6));
   memberships.set('center',universe.filter(n=>Math.floor(n/7)>0&&Math.floor(n/7)<3&&n%7>0&&n%7<6));
+  memberships.set('left',[0,1,2,3,7,8,9,10,14,15,16,21,22,23]);
+  memberships.set('right',universe.filter(n=>!memberships.get('left').includes(n)));
   memberships.set('all',universe);
   const selections = new Map(), groupButtons = new Map();
   let recentMembers = [], historyReady = false;
@@ -69,16 +73,23 @@
   clearAllBtn.append(make('span','Clear All'),make('small','0/28'));clearAllBtn.title='Unselect all numbers';
   const borderBtn=groupButton('border','Outer Edges');borderBtn.id='tl-select-border';borderBtn.title='Outer 4 edges: Row 1, Row 4, Col 1, Col 7 (18 numbers)';
   const centerBtn=groupButton('center','Inner Center');centerBtn.id='tl-select-center';centerBtn.title='Inner core numbers: Rows 2–3, Cols 2–6 (10 numbers)';
-  selectionControls.append(selectAllBtn,clearAllBtn,borderBtn,centerBtn,groupButton('recent','Last 10'),groupButton('absent','Absent in last 10'));
+  function selectOnlySide(key) {
+    const state=selectionState();state.mode='manual';state.numbers=new Set(membersFor(key));renderPalette();
+  }
+  const leftOnly=button('Select Left only',()=>selectOnlySide('left'));leftOnly.id='tl-select-left-only';
+  const rightOnly=button('Select Right only',()=>selectOnlySide('right'));rightOnly.id='tl-select-right-only';
+  leftOnly.className=rightOnly.className='tl-selection-group';
+  leftOnly.title=membersFor('left').join(', ');rightOnly.title=membersFor('right').join(', ');
+  selectionControls.append(selectAllBtn,clearAllBtn,leftOnly,rightOnly,borderBtn,centerBtn,groupButton('recent','Last 10'),groupButton('absent','Absent in last 10'));
   selectionToolbar.append(selectionStatus,selectionControls);
   const filterBar=make('div',undefined,'tl-palette-filters');filterBar.setAttribute('aria-label','Category selection and metrics');
   const quickFilters=make('div',undefined,'tl-quick-filters');
   const filterGaps=new Map(),filterStreaks=new Map();
-  Object.entries(categories).forEach(([key,label])=>{
+  Object.entries({...categories,left:'Left numbers',right:'Right numbers'}).forEach(([key,label])=>{
     const stack=make('div',undefined,'tl-filter-stack');
     const metric=(name,map)=>{const control=button('',()=>inspectGroup(key));control.className=`tl-filter-${name.toLowerCase()}`;
       control.dataset[name.toLowerCase()]=key;control.append(make('span',name),make('strong','N/A'),make('small',''));map.set(key,control);return control;};
-    const control=groupButton(key,key);control.title=label;
+    const control=groupButton(key,key==='left'?'L':key==='right'?'R':key);control.title=label;
     stack.append(metric('Streak',filterStreaks),control,metric('Gap',filterGaps));quickFilters.append(stack);
   });
   const filterSummary=make('p','Click a group to select its members; click a fully selected group to clear it.','tl-filter-summary');filterSummary.id='tl-filter-summary';
@@ -170,11 +181,12 @@
   const boardObserver=new ResizeObserver(updateBoardHint);boardObserver.observe(scroller);boardObserver.observe(frame);
 
   // Reuse round buttons across polls so keyboard focus stays on the same round.
-  const recentModes=['Number','Size','Parity','Combination','Board rows','Board columns','Colors','Extreme numbers','Board border'];
-  const recentTracks=['number','size','parity','combo','row','column','color','extreme','border'];
+  const recentModes=['Number','Size','Parity','Combination','Board rows','Board columns','Colors','Extreme numbers','Board border','Left / Right'];
+  const recentTracks=['number','size','parity','combo','row','column','color','extreme','border','side'];
   const boardColors=['#38bdf8','#a78bfa','#34d399','#fbbf24','#fb923c','#f472b6','#94a3b8'];
   // Match the timeline's category colors even when those tracks are hidden.
   const recentCategoryLegends={
+    'Left / Right':[['L','Left numbers','#8b5cf6'],['R','Right numbers','#f97316']],
     Size:[['S','Small','#38bdf8'],['B','Big','#34d399']],
     Parity:[['E','Even','#a78bfa'],['O','Odd','#fb923c']],
     Combination:[['SE','Small Even','#38bdf8'],['SO','Small Odd','#fbbf24'],['BE','Big Even','#a78bfa'],['BO','Big Odd','#34d399']]
@@ -235,15 +247,15 @@
     return {size,parity,combo:size+parity,row:`R${Math.floor(game.number/7)+1}`,column:`C${game.number%7+1}`,
       color:color?.key??'?',colorName:color?.label??'Color unavailable',
       extreme:game.number<=6 || game.number>=21?'J':'M',
-      border:isBorder?'O':'I'};
+      border:isBorder?'O':'I',side:memberships.get('left').includes(game.number)?'L':'R'};
   }
   function focusRecent(game) {recentFocused=game.game_no;recentRecord=game;updateRecentDetails();}
   function updateRecentDetails() {
     recentDetails.disabled=!recentRecord;
     recentDetails.setAttribute('aria-expanded',String(!recentInfo.hidden));
     if(!recentRecord){recentInfo.hidden=true;recentDetails.setAttribute('aria-expanded','false');recentInfoText.textContent='';recentLink.removeAttribute('href');return;}
-    const {size,parity,combo,row,column,colorName,extreme,border}=recentClassification(recentRecord);
-    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–6, 21–27)':'Middle (7–20)'} · ${border==='O'?'Outer edges (18)':'Inner center (10)'}${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
+    const {size,parity,combo,row,column,colorName,extreme,border,side}=recentClassification(recentRecord);
+    recentInfoText.textContent=`Number ${recentRecord.number} · ${size==='S'?'Small':'Big'} (${size}) · ${parity==='E'?'Even':'Odd'} (${parity}) · ${combo} · #${recentRecord.game_no} · ${new Date(recentRecord.timestamp).toLocaleString()} · Row ${row.slice(1)} · Column ${column.slice(1)} · ${colorName} · ${extreme==='J'?'Edges (0–6, 21–27)':'Middle (7–20)'} · ${border==='O'?'Outer edges (18)':'Inner center (10)'} · ${side==='L'?'Left':'Right'} numbers${recentRecord.gap_before?' · history gap before this round':''}${paletteStaleMessage?' · last loaded data':''}`;
     recentInfoText.textContent += ` · ${tipDescription(recentRecord)}`;
     recentLink.textContent=`Open round #${recentRecord.game_no} ↗`;recentLink.href=recentRecord.url;
     recentDetails.title=`Details for round #${recentRecord.game_no}`;
@@ -663,7 +675,7 @@
     data.checked_at=checkedAt;
     const checked=` · checked ${formatTime(checkedAt)}`;
     for(const node of [el('palette-status'),el('gap-status')])if(node)node.textContent=node.textContent.replace(/ · checked [^·]+/,checked+' ');
-    status(`${paused ? 'Paused' : 'Live · checks every 1s'}${checked} · latest ${data.latest_game_id ? '#'+data.latest_game_id : 'waiting'}${data.has_gaps?' · history gaps marked':''}`);
+    status(`${paused ? 'Paused' : 'Live · checks every 1s'}${checked} · latest ${data.latest_game_id ? '#'+data.latest_game_id : 'waiting'}${data.has_gaps?' · history gaps marked':''}${unavailableTracks.length ? ' · Some tracks require a server restart' : ''}`);
   }
   async function fetchData() {
     if (busy) {pending = true; return;}
@@ -685,10 +697,36 @@
         if(recovered)renderPalette();
         markChecked(response.headers.get('X-Timeline-Checked-At')||new Date().toISOString());return;
       }
+      if (response.status === 400 && requestedTracks !== null) {
+        // A newer browser script can be served by an older, still-running Django.
+        // Ask for an empty track list to obtain its supported catalog, then retry.
+        const catalogUrl = new URL(url);catalogUrl.searchParams.set('tracks', '');
+        const catalogResponse = await fetch(catalogUrl, {cache:'no-store', signal:AbortSignal.timeout(12000)});
+        if (!catalogResponse.ok) throw new Error(`HTTP ${response.status}`);
+        const catalog = await catalogResponse.json();
+        const supported = new Set(catalog.catalog.map(track=>track.key));
+        const rejected = enabled.filter(key=>!supported.has(key));
+        if (!rejected.length) throw new Error(`HTTP ${response.status}`);
+        unavailableTracks = [...new Set([...unavailableTracks, ...rejected])];
+        enabled = enabled.filter(key=>supported.has(key));
+        pending = true;return;
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const next = await response.json();
       if (requestedStream !== el('stream').value || requestedTracks !== (enabled === null ? null : enabled.join(','))) {pending = true; return;}
+      const supported = new Set(next.catalog.map(track=>track.key));
       if (enabled === null) {enabled = next.catalog.map(t => t.key); write('lucky28.timeline.tracks', enabled);}
+      const restored = unavailableTracks.filter(key=>supported.has(key));
+      unavailableTracks = unavailableTracks.filter(key=>!supported.has(key));
+      if (!read('lucky28.timeline.side-introduced') && supported.has('side')) {
+        if (!enabled.includes('side') && !restored.includes('side')) restored.push('side');
+        write('lucky28.timeline.side-introduced', true);
+      }
+      if (restored.length) {
+        enabled = [...new Set([...enabled, ...restored])];
+        write('lucky28.timeline.tracks', [...enabled, ...unavailableTracks]);
+        pending = true;return;
+      }
       const recovered=Boolean(paletteStaleMessage);
       data = next;
       feedETag=response.headers.get('ETag')||'';feedKey=requestKey;

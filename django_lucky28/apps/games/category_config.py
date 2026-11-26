@@ -31,9 +31,13 @@ BORDER_GROUPS = (
                    if n < 7 or n >= 21 or n % 7 in (0, 6))),
     NumberCategory('center', 'Inner board center', 'Board border', (8, 9, 10, 11, 12, 15, 16, 17, 18, 19)),
 )
+SIDE_GROUPS = (
+    NumberCategory('left', 'Left numbers', 'Left / Right', (0, 1, 2, 3, 7, 8, 9, 10, 14, 15, 16, 21, 22, 23)),
+    NumberCategory('right', 'Right numbers', 'Left / Right', (4, 5, 6, 11, 12, 13, 17, 18, 19, 20, 24, 25, 26, 27)),
+)
 CATEGORY_FAMILIES = (('Rows', ROW_GROUPS), ('Columns', COLUMN_GROUPS), ('SE / BE / BO / SO', COMBO_GROUPS),
-                     ('Extreme numbers', EXTREME_GROUPS), ('Board border', BORDER_GROUPS))
-CATEGORIES = ROW_GROUPS + COLUMN_GROUPS + COMBO_GROUPS + EXTREME_GROUPS + BORDER_GROUPS
+                     ('Extreme numbers', EXTREME_GROUPS), ('Board border', BORDER_GROUPS), ('Left / Right', SIDE_GROUPS))
+CATEGORIES = ROW_GROUPS + COLUMN_GROUPS + COMBO_GROUPS + EXTREME_GROUPS + BORDER_GROUPS + SIDE_GROUPS
 CATEGORY_BY_ID = {group.id: group for group in CATEGORIES}
 CATEGORIES_BY_NUMBER = {number: tuple(group for group in CATEGORIES if number in group.numbers) for number in range(28)}
 CATEGORY_MODES = ('absence', 'streak')

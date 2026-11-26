@@ -2,7 +2,7 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from games.category_config import COMBO_GROUPS, EXTREME_GROUPS, BORDER_GROUPS, ROW_GROUPS
+from games.category_config import COMBO_GROUPS, EXTREME_GROUPS, BORDER_GROUPS, ROW_GROUPS, SIDE_GROUPS
 from games.models import AlertDestination, CategoryAlertRule
 from games.services.category_alerts import ensure_settings
 
@@ -10,6 +10,7 @@ FAMILIES = {
     'rows': ('Lucky28 Row Alerts', ROW_GROUPS),
     'combinations': ('Lucky28 Combination Alerts', COMBO_GROUPS),
     'extremes': ('Lucky28 Extreme Number Alerts', EXTREME_GROUPS),
+    'sides': ('Lucky28 Left and Right Alerts', SIDE_GROUPS),
     'borders': ('Lucky28 Board Border Alerts', BORDER_GROUPS),
 }
 

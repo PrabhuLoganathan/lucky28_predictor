@@ -30,7 +30,28 @@ const { execFileSync } = require('child_process');
     expect(await viewport.evaluate(n=>getComputedStyle(n).overflowY === 'visible' || n.scrollHeight <= n.clientHeight)).toBe(true);
     await expect(page.locator('.tl-recent-chip').first()).toBeVisible();
     await expect(page.locator('.tl-recent-chip').last()).toBeVisible();
-    await expect(page.locator('tr[data-track]')).toHaveCount(12);
+    await expect(page.locator('tr[data-track]')).toHaveCount(13);
+    await expect(page.locator('tr[data-track="side"] .tl-dot')).toHaveCount(25);
+    // Simulate a browser with new assets talking to an old Django process.
+    const oldServer = async route => {
+      const tracks = new URL(route.request().url()).searchParams.get('tracks');
+      if (tracks && tracks.split(',').includes('side')) {
+        return route.fulfill({status:400, contentType:'application/json', body:JSON.stringify({error:'Unknown stream or tracker.'})});
+      }
+      const response = await route.fetch();
+      if (response.status() !== 200) return route.fulfill({response});
+      const body = await response.json();
+      body.catalog = body.catalog.filter(track => track.key !== 'side');
+      return route.fulfill({response, json:body, headers:{...response.headers(), etag:'"old-server"'}});
+    };
+    await page.route('**/api/trackers/live/**', oldServer);
+    await page.reload();
+    await expect(page.locator('#tl-status')).toContainText('Some tracks require a server restart');
+    await expect(page.locator('tr[data-track="size"] .tl-dot')).toHaveCount(25);
+    await expect(page.locator('tr[data-track="side"]')).toHaveCount(0);
+    await page.unroute('**/api/trackers/live/**', oldServer);
+    await page.locator('#tl-refresh').click();
+    await expect(page.locator('tr[data-track="side"] .tl-dot')).toHaveCount(25);
     await expect(page.locator('tr[data-track="size"] .tl-dot')).toHaveCount(25);
     await page.locator('tr[data-track="size"] .tl-dot').first().click();
     await expect(page.locator('#tl-detail')).toContainText('Game #R159');
@@ -136,7 +157,8 @@ const { execFileSync } = require('child_process');
       ['Board columns',recentNumbers.map(n=>'C'+(n%7+1)),7],
       ['Colors',['Cyan / Teal','Grey','Magenta','Grey','Cyan / Teal','Cyan / Teal','Grey','Cyan / Teal','Grey','Green'],7],
       ['Extreme numbers',recentNumbers.map(n=>n<=6||n>=21?'J':'M'),2],
-      ['Board border',recentNumbers.map(n=>(n<7||n>=21||n%7===0||n%7===6)?'O':'I'),2]
+      ['Board border',recentNumbers.map(n=>(n<7||n>=21||n%7===0||n%7===6)?'O':'I'),2],
+      ['Left / Right',recentNumbers.map(n=>[0,1,2,3,7,8,9,10,14,15,16,21,22,23].includes(n)?'L':'R'),2]
     ];
     for(const [name,labels,legendCount] of addedViews){
       await recentView.click();expect(await recentLabels()).toEqual(labels);
@@ -221,7 +243,7 @@ const { execFileSync } = require('child_process');
     expect(await viewport.evaluate(n=>n.scrollTop)).toBe(0);
     await expect(recentView).toHaveText('View: Size ↻');
     await expect(page.locator('.tl-board-gap')).toHaveCount(11);await expect(page.locator('.tl-board-streak')).toHaveCount(11);
-    await expect(page.locator('[data-streak]')).toHaveCount(8);await expect(page.locator('[data-gap]')).toHaveCount(8);
+    await expect(page.locator('[data-streak]')).toHaveCount(10);await expect(page.locator('[data-gap]')).toHaveCount(10);
     for(const key of ['S','O','SO']){
       await expect(page.locator(`[data-streak="${key}"] strong`)).toHaveText('3');
       await expect(page.locator(`[data-streak="${key}"]`)).toHaveClass(/metric-max-streak/);

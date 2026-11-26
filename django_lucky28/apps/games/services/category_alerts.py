@@ -26,7 +26,9 @@ def ensure_settings(key):
     config, _ = CategoryAlertSettings.objects.get_or_create(stream=stream)
     existing = {(rule.group_id, rule.mode) for rule in config.rules.all()}
     CategoryAlertRule.objects.bulk_create([
-        CategoryAlertRule(settings=config, group_id=group.id, mode=mode)
+        CategoryAlertRule(settings=config, group_id=group.id, mode=mode,
+                          threshold=6 if group.family == 'Left / Right' else None,
+                          send_to_levels=group.family != 'Left / Right')
         for group in CATEGORIES for mode in CATEGORY_MODES if (group.id, mode) not in existing
     ])
     return config
@@ -170,7 +172,7 @@ def synchronize(key='lucky28', evaluate_current=True):
 def save_settings(key, enabled, values, editor, notify_changes=None):
     expected = {(group.id, mode) for group in CATEGORIES for mode in CATEGORY_MODES}
     if set(values) != expected:
-        raise ValueError('Supply all 15 groups and both alert types.')
+        raise ValueError('Supply all groups and both alert types.')
     validated = {pair: dict(enabled=bool(value['enabled']), threshold=parse_threshold(value['threshold'], value['enabled']))
                  for pair, value in values.items()}
     config = ensure_settings(key)
